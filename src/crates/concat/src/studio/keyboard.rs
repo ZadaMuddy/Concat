@@ -14,16 +14,16 @@ impl Studio {
     pub fn shortcut(&mut self, action: &str) {
         log::debug!("shortcut: {action}");
         match action {
-            // The selected clips when there are any, as the tray's button
-            // and the menu split: the chord cut every track under the
-            // playhead whatever was selected, titles and music with it.
+            // The selection alone, where the playhead runs through it: the
+            // chord used to cut every track under the playhead whatever was
+            // selected, titles and music with it.
             "split" => {
                 let at = self.playhead;
-                self.split_at(at, true);
+                self.split_at(at);
             }
             "split-selected" => {
                 let at = self.playhead;
-                self.split_at(at, true);
+                self.split_at(at);
             }
             // B: the razor, on and off.
             "split-tool" => {
@@ -164,7 +164,7 @@ impl Studio {
                 let at = self.playhead;
                 self.flush_commit();
                 self.selection = vec![id.to_owned()];
-                self.split_at(at, true);
+                self.split_at(at);
             }
             "freeze" => self.freeze_at_playhead(),
             // The clip right-clicked, or the selection when it is one of

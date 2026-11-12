@@ -1202,7 +1202,7 @@ fn start(project: Option<std::path::PathBuf>, smoke: bool) -> Result<(), slint::
     }));
     editor.on_split(on_window!(|state| {
         let at = state.playhead;
-        state.split_at(at, true);
+        state.split_at(at);
     }));
     editor.on_merge(on_window!(|state| {
         state.merge();
@@ -2581,11 +2581,11 @@ fn start(project: Option<std::path::PathBuf>, smoke: bool) -> Result<(), slint::
                             state.seek(at);
                         }
                         "delete" => state.delete_selected(),
-                        // The selected clips, as the tray's button splits, or
-                        // everything under the playhead when none is.
+                        // The selection, as the tray's button splits: nothing
+                        // at all without one.
                         "split" => {
                             let at = state.playhead;
-                            state.split_at(at, true);
+                            state.split_at(at);
                         }
                         "save" => state.save(true),
                         _ => {}

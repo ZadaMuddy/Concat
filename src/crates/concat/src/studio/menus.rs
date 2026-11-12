@@ -7,9 +7,12 @@ use super::*;
 impl Studio {
     // ── edits from menus and the tray ──
 
-    /// Split at `at`: every selected clip the instant runs through, or every
-    /// clip at all when nothing is selected.
-    pub fn split_at(&mut self, at: f32, only_selected: bool) {
+    /// Split at `at`, on the selection alone: a split cuts what the person
+    /// has chosen, and only when `at` runs through it. With nothing selected
+    /// there is nothing to cut - reaching into every track under the playhead
+    /// took the captions and the music along with the picture, which is not
+    /// what the button or the chord says it does.
+    pub fn split_at(&mut self, at: f32) {
         let selection = self.selection.clone();
         let at = f64::from(at);
         let victims: Vec<String> = self
@@ -17,19 +20,26 @@ impl Studio {
             .clips
             .iter()
             .filter(|clip| {
-                clip.start + f64::from(MIN_DURATION) < at
+                selection.contains(&clip.id)
+                    && clip.start + f64::from(MIN_DURATION) < at
                     && at < clip.start + clip.duration - f64::from(MIN_DURATION)
-                    && (!only_selected || selection.is_empty() || selection.contains(&clip.id))
                     && !self.locked(&clip.track_id)
             })
             .map(|clip| clip.id.clone())
             .collect();
-        if !victims.is_empty() {
-            self.apply(Command::SplitClips {
-                clip_ids: victims,
-                time: at,
-            });
+        if victims.is_empty() {
+            // Say why nothing happened, rather than swallowing the chord.
+            if selection.is_empty() {
+                self.notify(&t("studio.selectClipTimelineFirst"), true);
+            } else {
+                self.notify(&t("studio.parkPlayheadInsideClip"), true);
+            }
+            return;
         }
+        self.apply(Command::SplitClips {
+            clip_ids: victims,
+            time: at,
+        });
     }
 
     /// Delete Left / Delete Right, Q and W: the selected clips the
