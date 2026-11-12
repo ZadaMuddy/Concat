@@ -233,9 +233,21 @@ impl Studio {
 
     /// Seconds the project runs to, for Fit and for the scroll floor.
     pub fn duration(&self) -> f32 {
-        self.timeline().clips.iter().fold(0.0_f64, |longest, clip| {
-            longest.max(clip.start + clip.duration)
-        }) as f32
+        duration_of(self.timeline())
+    }
+
+    /// The same, as committed: the session's project and never the echo of a
+    /// gesture in flight.
+    ///
+    /// What a scroll bound has to read. The window draws the echo, so a clip
+    /// dragged past the end lengthens [`Self::duration`] as it goes - and a
+    /// bound taken from that moves with the clip it is bounding: the edge
+    /// scroll runs, the clip runs further, the bound runs after it, and none
+    /// of them ever stops.
+    pub fn committed_duration(&self) -> f32 {
+        self.session
+            .as_ref()
+            .map_or(0.0, |session| duration_of(session.project().active()))
     }
 
     /// The edit point next to the playhead - the nearest clip start or end
@@ -307,6 +319,31 @@ impl Studio {
             if clip.id == exclude {
                 continue;
             }
+            consider(clip.start as f32);
+            consider((clip.start + clip.duration) as f32);
+        }
+        best
+    }
+
+    /// The instant a dragged playhead is pulled to: zero and every clip's
+    /// start and end, but never the playhead itself. A scrub that counted
+    /// its own position among the targets would stick to it and stop dead -
+    /// the ruler and the grip would feel like the pointer had frozen.
+    pub fn snapped_instant(&self, time: f32, threshold: f32) -> f32 {
+        if !self.lanes.snap {
+            return time;
+        }
+        let mut best = time;
+        let mut best_distance = threshold;
+        let mut consider = |target: f32| {
+            let distance = (target - time).abs();
+            if distance < best_distance {
+                best = target;
+                best_distance = distance;
+            }
+        };
+        consider(0.0);
+        for clip in &self.timeline().clips {
             consider(clip.start as f32);
             consider((clip.start + clip.duration) as f32);
         }
@@ -576,4 +613,14 @@ impl Studio {
             .playback
             .set_clips(std::path::PathBuf::from(session.path()), specs);
     }
+}
+
+/// How long a timeline runs: the furthest end any clip on it reaches.
+fn duration_of(timeline: &Timeline) -> f32 {
+    timeline
+        .clips
+        .iter()
+        .fold(0.0_f64, |longest, clip| {
+            longest.max(clip.start + clip.duration)
+        }) as f32
 }

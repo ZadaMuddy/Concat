@@ -424,7 +424,10 @@ impl Studio {
         sync(&models.key_marks, self.key_marks());
         editor.set_scroll_left(self.lanes.scroll_left);
         editor.set_seconds_per_pixel(self.lanes.seconds_per_pixel);
-        editor.set_duration_seconds(self.duration());
+        // As committed, not through the echo: the bar's extent and the edge
+        // scroll's far end are both built on this, and a clip dragged past
+        // the end must not lengthen either while the pointer holds it.
+        editor.set_duration_seconds(self.committed_duration());
         editor.set_frame_rate(self.frame_rate());
         editor.set_tool(self.lanes.tool);
         editor.set_snap(self.lanes.snap);

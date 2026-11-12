@@ -822,6 +822,10 @@ export component PhoneEditor inherits Rectangle {
                     Editor.blur();
                     Editor.scrubbed(seconds);
                 }
+                scrubbed-drag(seconds) => {
+                    Editor.blur();
+                    Editor.scrubbed-drag(seconds);
+                }
                 finger-held => { Editor.finger-held(); }
                 finger-lifted => { Editor.finger-lifted(); }
                 key-mark-moved(from, to) => { Editor.key-mark-moved(from, to); }

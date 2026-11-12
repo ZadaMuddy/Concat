@@ -346,6 +346,16 @@ impl Studio {
         }
     }
 
+    /// A scrub from a drag: the playhead goes to `seconds`, pulled first to
+    /// the nearest cut within snapping distance. A click comes through
+    /// [`Self::scrub`] and lands exactly where it did, so a press meant to
+    /// stop on one frame is never moved off it by a cut half a pixel away.
+    pub fn scrub_snapped(&mut self, seconds: f32) {
+        let threshold = 8.0 * self.lanes.seconds_per_pixel;
+        let at = self.snapped_instant(seconds.max(0.0), threshold);
+        self.scrub(at);
+    }
+
     /// The finger that dragged the phone's lanes along the cut has let go:
     /// they carry on at its speed and run down, scrubbing as they go.
     /// Nothing while playing - the transport owns the playhead then - and

@@ -121,6 +121,19 @@ impl Studio {
                     .flatten()
                     .collect();
                 let shift = seconds + self.snap_shift(&edges, threshold, &moving);
+                // The moving clips' heads may not leave the view. Past its
+                // right edge there is nothing under the pointer to aim at,
+                // and the view - bounded now at the cut plus the room after
+                // it - cannot follow any further, so the clip would slide on
+                // out of sight with the drag. Clamped here, it rides the edge
+                // while the view is still moving and stops when the view does.
+                let view_right =
+                    self.lanes.scroll_left + self.lanes.width * self.lanes.seconds_per_pixel;
+                let furthest = origins
+                    .iter()
+                    .fold(f32::MIN, |right, origin| right.max(origin.start));
+                let room = (view_right - furthest).max(0.0);
+                let shift = shift.min(room);
                 let rows = nearest_row(lanes, row_top(lanes, anchor.row) + pixels) - anchor.row;
                 let count = self.timeline().tracks.len() as i32;
                 let moves: Vec<ClipMove> = origins

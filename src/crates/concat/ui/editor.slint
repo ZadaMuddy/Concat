@@ -470,6 +470,9 @@ export global Editor {
     /// decides which clips are worth publishing.
     callback lanes-resized(width: float);
     callback scrubbed(seconds: float);
+    /// A seek from a drag: the playhead is pulled to the nearest cut as it
+    /// goes. A click comes through `scrubbed` and lands exactly where it did.
+    callback scrubbed-drag(seconds: float);
     /// A finger landed on a phone's lanes, or two began a pinch: a glide
     /// still running stops.
     callback finger-held();

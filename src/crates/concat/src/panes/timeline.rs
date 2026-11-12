@@ -29,6 +29,14 @@ pub const ZOOM_OUT_LIMIT: f32 = 1.5;
 /// One step of the menu's zoom, as a factor.
 const ZOOM_STEP: f32 = 1.4;
 
+/// How far past the end of the cut the view may scroll: thirty seconds.
+///
+/// Room to drop something after the last clip and watch it there, and no
+/// further. Unbounded, the wheel ran off into empty time - the lanes showed
+/// nothing, the scrollbar's extent grew to follow, and the only way back was
+/// to find the cut again.
+pub const SCROLL_PAST_END: f32 = 30.0;
+
 /// What the window knows about a lane that the document does not: whether
 /// it is locked, and how tall to draw it.
 #[derive(Clone, Copy)]
@@ -216,6 +224,24 @@ impl TimelinePane {
                 self.recentre(studio.playhead);
             }
         }
+        // One bound, after every message that can move the view - a scroll, a
+        // zoom, a resize, a fit - rather than one inside each of them. A
+        // centred (phone) view is the playhead's and keeps its own arithmetic.
+        if !self.centred {
+            let duration = studio.committed_duration();
+            // Nor may it zoom out past the cut and the room after it. Bounding
+            // only the scroll left this hole: once the view was wider than
+            // cut + SCROLL_PAST_END the left edge could only sit at zero, and
+            // the screen showed whole minutes of empty ground with the cut a
+            // strip in the middle of it, and nothing at either end to scroll
+            // to. The zoom is what bounds how much of the timeline is visible;
+            // the scroll only chooses which part of it.
+            if self.width > 1.0 {
+                let cap = (duration + SCROLL_PAST_END) / self.width;
+                self.seconds_per_pixel = self.seconds_per_pixel.min(cap.max(ZOOM_IN_LIMIT));
+            }
+            self.scroll_left = self.scroll_left.clamp(0.0, self.max_scroll(duration));
+        }
     }
 
     /// The lanes scrolled to `seconds` at their left edge. See `Scrolled`.
@@ -225,6 +251,14 @@ impl TimelinePane {
         } else {
             seconds.max(0.0)
         };
+    }
+
+    /// The furthest `scroll_left` may sit for a cut this long: the cut plus
+    /// [`SCROLL_PAST_END`], less a screen - the right edge of the view stops
+    /// that much past the last clip. Never before the start, and zero when
+    /// the view already shows more than the cut and the room after it.
+    pub fn max_scroll(&self, duration: f32) -> f32 {
+        (duration + SCROLL_PAST_END - self.width * self.seconds_per_pixel).max(0.0)
     }
 
     /// Puts the playhead at the middle of the lanes, when the view is the

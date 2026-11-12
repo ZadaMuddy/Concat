@@ -1215,6 +1215,9 @@ fn start(project: Option<std::path::PathBuf>, smoke: bool) -> Result<(), slint::
     editor.on_scrubbed(on_lanes!(|state, seconds: f32| {
         state.scrub(seconds);
     }));
+    editor.on_scrubbed_drag(on_lanes!(|state, seconds: f32| {
+        state.scrub_snapped(seconds);
+    }));
     editor.on_finger_held(on_lanes!(|state| {
         state.finger_held();
     }));
