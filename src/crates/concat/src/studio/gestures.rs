@@ -21,6 +21,9 @@ impl Studio {
         // change would look for it on the newly selected clip and lose it.
         self.flush_commit();
         self.end_audition();
+        // A snap from the last gesture is not this one's: the line belongs to
+        // the edge being pulled now, and starts hidden.
+        self.snap_mark = None;
         // A press on a transition's seam or handles selects the transition,
         // not the clip it rides into; a drag there still sets its length.
         if edge == 2
@@ -225,6 +228,14 @@ impl Studio {
                         limit,
                     );
                     let delta = at - start;
+                    // The hairline the lanes draw: only when the edge landed
+                    // on the instant the snap offered, and not when the
+                    // neighbour's room or the file's own head clamped it
+                    // somewhere else - a line at a place the cut did not go
+                    // would be a lie about what snapped.
+                    self.snap_mark = ((at - wanted).abs() < 1e-4
+                        && (wanted - (start + seconds)).abs() > 1e-4)
+                        .then_some(at);
                     if let Some(clip) = self.echo_clip_mut(&id) {
                         clip.start = f64::from(at);
                         clip.duration = f64::from(duration - delta);
@@ -237,6 +248,9 @@ impl Studio {
                 } else {
                     let wanted = self.snapped(start + duration + seconds, threshold, &id);
                     let at = wanted.min(ceiling).max(start + MIN_DURATION);
+                    self.snap_mark = ((at - wanted).abs() < 1e-4
+                        && (wanted - (start + duration + seconds)).abs() > 1e-4)
+                        .then_some(at);
                     if let Some(clip) = self.echo_clip_mut(&id) {
                         clip.duration = f64::from(at - start);
                     }
@@ -285,6 +299,7 @@ impl Studio {
     /// The pointer let go: the whole gesture becomes one command.
     pub fn clip_released(&mut self) {
         let gesture = std::mem::replace(&mut self.gesture, Gesture::None);
+        self.snap_mark = None;
         let Some(echo) = self.echo.as_ref() else {
             return;
         };

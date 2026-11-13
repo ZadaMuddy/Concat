@@ -1275,6 +1275,9 @@ export component Lanes inherits Rectangle {
     in property <[ClipData]> clips;
     in property <TimelineTool> tool: TimelineTool.select;
     in property <float> playhead;
+    /// The instant the trim in flight snapped onto, in seconds, or -1 for
+    /// none. Drawn as the hairline below; see `Studio::snap_mark`.
+    in property <float> snap-line: -1;
     /// The selected clip's keys as instants; see `Editor.key-marks`.
     in property <[float]> key-marks;
     in property <float> frame-rate: 30;
@@ -1534,8 +1537,12 @@ export component Lanes inherits Rectangle {
     property <bool> edge-left: root.pointer-x < root.edge-zone && root.scroll-left > 0;
     property <bool> edge-right: root.pointer-x > root.width - root.edge-zone
         && root.scroll-left < root.max-scroll;
-    property <bool> at-edge: (root.scrubbing || root.clip-dragging)
+    property <bool> at-edge: (root.scrubbing || root.clip-dragging || root.band-drawing)
         && (root.edge-left || root.edge-right);
+    /// The marquee is being drawn: the empty-lane selection. It carries the
+    /// view at the edge as a clip drag does, so a band can reach material that
+    /// is off screen instead of stopping at the pane's edge.
+    property <bool> band-drawing;
     /// How fast the edge carries the view, in pixels a second: 120 as the
     /// pointer enters the zone, 1600 well past the lanes.
     ///
@@ -1571,9 +1578,12 @@ export component Lanes inherits Rectangle {
                 + (root.edge-left ? -1 : 1) * carry)));
             if (root.scrubbing) {
                 root.scrubbed-drag(Math.max(0, root.seconds-at(root.pointer-x)));
-            } else {
+            } else if (root.clip-dragging) {
                 root.clip-dragged(root.drag-seconds + (root.scroll-left - root.press-scroll), root.drag-pixels);
             }
+            // A band needs nothing beyond the scroll itself: its anchor is
+            // kept in seconds, so it moves with the view while the pointer's
+            // end stays at the edge, and the box grows into the new ground.
         }
     }
 
@@ -1727,6 +1737,7 @@ export component Lanes inherits Rectangle {
             height: root.lanes-h;
 
             property <bool> drawing;
+            property <float> from-seconds;
             property <bool> additive;
             property <length> from-x;
             property <length> from-y;
@@ -1741,23 +1752,30 @@ export component Lanes inherits Rectangle {
                     self.from-y = self.mouse-y;
                     self.to-x = self.mouse-x;
                     self.to-y = self.mouse-y;
+                    // The anchor as an instant, not a pixel: the view scrolls
+                    // under a band that reaches the edge, and a pixel anchor
+                    // would slide across the cut with it.
+                    self.from-seconds = root.seconds-at(self.from-x);
+                    root.pointer-x = self.mouse-x;
                     if (root.finger) {
                         root.finger-down(self.mouse-x, self.mouse-y, event.touch-finger-id);
                     } else {
                         self.drawing = true;
+                        root.band-drawing = true;
                     }
                 } else if (event.kind == PointerEventKind.up
                     || event.kind == PointerEventKind.cancel) {
                     if (self.drawing) {
                         self.drawing = false;
+                        root.band-drawing = false;
                         // A press on an empty lane selects, or clears the
                         // selection when it caught nothing, and never moves
                         // the playhead: the ruler is where time is scrubbed,
                         // and a click meant to drop a selection should not
                         // also lose the person's place in the cut.
                         root.band-selected(
-                            root.seconds-at(Math.min(self.from-x, self.to-x)),
-                            root.seconds-at(Math.max(self.from-x, self.to-x)),
+                            Math.min(self.from-seconds, root.seconds-at(self.to-x)),
+                            Math.max(self.from-seconds, root.seconds-at(self.to-x)),
                             root.stack-y(Math.min(self.from-y, self.to-y)),
                             root.stack-y(Math.max(self.from-y, self.to-y)),
                             self.additive);
@@ -1778,6 +1796,7 @@ export component Lanes inherits Rectangle {
             moved => {
                 self.to-x = self.mouse-x;
                 self.to-y = self.mouse-y;
+                root.pointer-x = self.mouse-x;
                 if (root.finger && self.pressed) {
                     root.finger-moved(self.mouse-x, self.mouse-y, true);
                 }
@@ -1881,9 +1900,13 @@ export component Lanes inherits Rectangle {
 
         // ── the band being drawn ─────────────────────────────────────────
         if band.drawing: Rectangle {
-            x: Math.min(band.from-x, band.to-x);
+            // From the instant the press landed, not from its screen x: while
+            // the band reaches the edge the view scrolls under it, and a pixel
+            // anchor would slide across the cut with it.
+            x: Math.min(root.at(band.from-seconds), band.to-x);
             y: root.ruler-height + Math.min(band.from-y, band.to-y);
-            width: Math.max(band.from-x, band.to-x) - Math.min(band.from-x, band.to-x);
+            width: Math.max(root.at(band.from-seconds), band.to-x)
+                - Math.min(root.at(band.from-seconds), band.to-x);
             height: Math.max(band.from-y, band.to-y) - Math.min(band.from-y, band.to-y);
             background: Theme.accent-soft;
             border-width: 1px;
@@ -2197,6 +2220,24 @@ export component Lanes inherits Rectangle {
             height: root.height;
             background: Theme.accent;
             visible: self.x >= 0px && self.x <= root.width;
+        }
+
+        // ── the snap line ────────────────────────────────────────────────
+        //
+        // Where a trimmed edge landed on a neighbour: a hairline through the
+        // lanes. A snap is otherwise invisible - the edge simply stops a few
+        // pixels short of where the pointer asked - and pulling a caption's
+        // edge onto the picture's cut is exactly the case worth seeing.
+        //
+        // A line and not a band, in the accent the razor draws with: it marks
+        // one instant, and it goes when the gesture does.
+        if root.snap-line >= 0 && root.at(root.snap-line) >= 0px
+            && root.at(root.snap-line) <= root.width: Rectangle {
+            x: root.at(root.snap-line);
+            y: root.ruler-height;
+            width: 1px;
+            height: root.lanes-h;
+            background: Theme.accent;
         }
 
         // ── the playhead ─────────────────────────────────────────────────

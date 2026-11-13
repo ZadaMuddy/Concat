@@ -1230,6 +1230,12 @@ pub struct Studio {
     #[allow(clippy::type_complexity)]
     pub title_blocks: HashMap<String, ((u32, u32), (i32, i32))>,
     pub drop: Option<DropPlan>,
+    /// The instant the gesture in flight has snapped onto, for the hairline
+    /// the lanes draw: a trim's edge pulled to a neighbour's, a clip's head or
+    /// tail landed on one. None when nothing is snapped, and cleared when the
+    /// gesture ends - see `gestures.rs`, which sets it, and `publish.rs`,
+    /// which sends it to the window as `-1` for none.
+    pub snap_mark: Option<f32>,
     pub project_sheet: crate::panes::project::ProjectPane,
     pub captions: crate::panes::captions::CaptionsPane,
     pub speech: crate::panes::speech::SpeechPane,
@@ -3158,6 +3164,7 @@ impl Studio {
             last_commit: None,
             title_blocks: HashMap::new(),
             drop: None,
+            snap_mark: None,
             project_sheet: crate::panes::project::ProjectPane::default(),
             captions: crate::panes::captions::CaptionsPane::default(),
             speech: crate::panes::speech::SpeechPane::with_saved(&host.dirs),

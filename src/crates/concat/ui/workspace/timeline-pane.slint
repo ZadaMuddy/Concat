@@ -38,6 +38,8 @@ export component TimelinePane inherits Rectangle {
     // ── the tray ─────────────────────────────────────────────────────────
     in property <TimelineTool> tool: TimelineTool.select;
     in property <bool> snap: true;
+    /// The instant the trim in flight snapped onto, in seconds; -1 for none.
+    in property <float> snap-line: -1;
     in property <bool> magnetic: false;
     in property <bool> linkage: true;
     in property <bool> pan-mode: false;
@@ -447,6 +449,7 @@ export component TimelinePane inherits Rectangle {
                 key-marks: root.key-marks;
                 tool: root.tool;
                 playhead: root.playhead;
+                snap-line: root.snap-line;
                 frame-rate: root.frame-rate;
                 scroll-left: root.scroll-left;
                 max-scroll: Math.max(0, root.duration-seconds + root.scroll-past-end

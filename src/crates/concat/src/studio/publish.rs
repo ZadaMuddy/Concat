@@ -421,6 +421,9 @@ impl Studio {
             .unwrap_or(0);
         editor.set_timeline_current_tab(active as i32);
         editor.set_playhead(self.playhead);
+        // The hairline a trim draws where it snapped; -1 for none, the
+        // sentinel the interface reads as "no line". See `snap_mark`.
+        editor.set_snap_line(self.snap_mark.unwrap_or(-1.0));
         sync(&models.key_marks, self.key_marks());
         editor.set_scroll_left(self.lanes.scroll_left);
         editor.set_seconds_per_pixel(self.lanes.seconds_per_pixel);

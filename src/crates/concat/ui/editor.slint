@@ -339,6 +339,9 @@ export global Editor {
     in-out property <[ClipData]> clips;
     in-out property <TimelineTool> tool;
     in-out property <bool> snap;
+    /// The instant a trimmed edge snapped onto, in seconds, or -1 for none.
+    /// The lanes draw it as a hairline while a gesture holds it.
+    in-out property <float> snap-line: -1;
     /// The magnetic timeline: a delete or a trim closes the gap it would
     /// leave. A remembered preference, which Rust owns; the tray's button
     /// and the Settings switch both show it.
