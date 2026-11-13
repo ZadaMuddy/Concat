@@ -270,6 +270,18 @@ impl Studio {
                 name: plan.label.clone(),
                 sound: plan.kind == ClipKind::SoundLayer,
             })
+        } else if let Some(media_ids) = self.dragged_selection(&plan.media) {
+            // The card is one of several held in the bin, so the menu acts on
+            // the selection, as a drag of that card does: every one of them,
+            // end to end from the playhead, in the bin's order. It added the
+            // one card named in the payload before, so a selection of five
+            // landed as a single clip.
+            self.apply(Command::AddClipsInSequence {
+                media_ids,
+                track_id: None,
+                start,
+                ripple: true,
+            })
         } else {
             self.apply(Command::AddClipAtFirstFree {
                 media_id: plan.media.clone(),
