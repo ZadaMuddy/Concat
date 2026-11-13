@@ -424,10 +424,12 @@ impl Studio {
         sync(&models.key_marks, self.key_marks());
         editor.set_scroll_left(self.lanes.scroll_left);
         editor.set_seconds_per_pixel(self.lanes.seconds_per_pixel);
-        // As committed, not through the echo: the bar's extent and the edge
-        // scroll's far end are both built on this, and a clip dragged past
-        // the end must not lengthen either while the pointer holds it.
-        editor.set_duration_seconds(self.committed_duration());
+        // As the window shows it, which during a gesture is the echo: the
+        // bar's extent and the edge scroll's far end are both built on this,
+        // and a clip dragged past the end is extending the timeline - the
+        // view has to be able to follow it. What kept that from running away
+        // is the edge scroll itself, which moves only while the pointer does.
+        editor.set_duration_seconds(self.duration());
         editor.set_frame_rate(self.frame_rate());
         editor.set_tool(self.lanes.tool);
         editor.set_snap(self.lanes.snap);

@@ -1513,10 +1513,17 @@ export component Lanes inherits Rectangle {
     /// pointer just inside it creeps, one well past the lanes runs. At one
     /// speed, a dozen pixels a tick from the zone's first pixel, the view
     /// ran off with the clip before it could be aimed (#633).
-    property <float> edge-depth: Math.min(1, Math.max(0,
-        (root.pointer-x < root.edge-zone
+    ///
+    /// Written as floats throughout, dividing each length by `1px` first.
+    /// Mixing lengths and numbers here does not clamp the way it reads: a
+    /// ratio that stayed a length passed a value of three or four where one
+    /// was the ceiling, and the speed built on it came out ten times over.
+    property <float> edge-depth: {
+        let over = (root.pointer-x < root.edge-zone
             ? root.edge-zone - root.pointer-x
-            : root.pointer-x - (root.width - root.edge-zone)) / (root.edge-zone * 2)));
+            : root.pointer-x - (root.width - root.edge-zone)) / 1px;
+        Math.min(1, Math.max(0, over / (root.edge-zone / 1px * 2)));
+    }
     /// Where the edge scroll stops, which is where everything else stops:
     /// Rust's `max-scroll`, not a second rule of this panel's own. It used to
     /// be a quarter of a view past the cut, which is zoom-dependent - two and
@@ -1529,15 +1536,39 @@ export component Lanes inherits Rectangle {
         && root.scroll-left < root.max-scroll;
     property <bool> at-edge: (root.scrubbing || root.clip-dragging)
         && (root.edge-left || root.edge-right);
+    /// How fast the edge carries the view, in pixels a second: 120 as the
+    /// pointer enters the zone, 1600 well past the lanes.
+    ///
+    /// A speed rather than a step per tick, so what a tick carries can be a
+    /// fraction of a pixel and reads as motion instead of as ticks. A hundred
+    /// and twenty a second at the zone's inner edge is slow enough to aim by;
+    /// the ramp is for a hand that has left the lanes altogether.
+    pure function edge-speed() -> float {
+        return 120 + 1480 * root.edge-depth * root.edge-depth;
+    }
 
     edge-scroll := Timer {
         interval: 16ms;
         running: root.at-edge;
         triggered => {
-            // One pixel a tick at the zone's inner edge, up to two dozen.
+            // Sixteen milliseconds of that speed, in pixels - a fractional
+            // count, not a whole one - and never more than two per cent of
+            // what the pane is showing.
+            //
+            // The cap is not decoration. What a tick carries measured eight
+            // and a half seconds against a ceiling of nought point seven, a
+            // factor of eleven, which is exactly what `edge-depth` produces
+            // if its clamp does not hold and the pointer sits a couple of
+            // hundred pixels outside the lanes - which is where it sits when
+            // a drag to the left runs over the track headers. Bounded here in
+            // seconds rather than trusted there in arithmetic, the view can
+            // sweep at most a fiftieth of itself a tick whatever the ramp
+            // returns.
+            let view_seconds = (root.width / 1px) * root.seconds-per-pixel;
+            let carry = Math.min(root.edge-speed() * 0.016 * root.seconds-per-pixel,
+                view_seconds * 0.02);
             root.scrolled(Math.min(root.last-left, Math.max(0, root.scroll-left
-                + (root.edge-left ? -1 : 1) * (1 + 23 * root.edge-depth * root.edge-depth)
-                    * root.seconds-per-pixel)));
+                + (root.edge-left ? -1 : 1) * carry)));
             if (root.scrubbing) {
                 root.scrubbed-drag(Math.max(0, root.seconds-at(root.pointer-x)));
             } else {

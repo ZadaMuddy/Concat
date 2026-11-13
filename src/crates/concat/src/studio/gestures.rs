@@ -57,6 +57,7 @@ impl Studio {
 
         self.begin_echo();
         if edge >= 0 && self.selection.len() <= 1 {
+            log::debug!("press {id}: TRIM edge {edge}");
             self.gesture = Gesture::Trim {
                 clip: id.to_owned(),
                 edge: if edge == 0 { Edge::Start } else { Edge::End },
@@ -92,6 +93,10 @@ impl Studio {
             origins,
             lanes: self.lane_heights(),
         };
+        if let Gesture::Move { origins, .. } = &self.gesture {
+            log::debug!("press {id}: MOVE {} clip(s) from {:?}", origins.len(),
+                origins.iter().map(|o| o.start).collect::<Vec<_>>());
+        }
     }
 
     /// The pointer moved: the echo follows it.
@@ -120,20 +125,28 @@ impl Studio {
                     })
                     .flatten()
                     .collect();
+                // Nothing bounds the drag. A clip follows the pointer, full
+                // stop: the view follows the clip, because the edge scroll
+                // runs while the pointer travels, and the cut the window is
+                // shown is the echo - so the room the view may scroll into
+                // grows exactly as the drag opens it.
+                //
+                // A clamp at the view's edge was tried twice and became a wall
+                // in one direction both times: once the clip reached the edge,
+                // and once the view had scrolled past the position the clamp
+                // was measuring from. The clamp is the thing that must not
+                // bound a gesture; see `SCROLL_PAST_END`.
                 let shift = seconds + self.snap_shift(&edges, threshold, &moving);
-                // The moving clips' heads may not leave the view. Past its
-                // right edge there is nothing under the pointer to aim at,
-                // and the view - bounded now at the cut plus the room after
-                // it - cannot follow any further, so the clip would slide on
-                // out of sight with the drag. Clamped here, it rides the edge
-                // while the view is still moving and stops when the view does.
-                let view_right =
-                    self.lanes.scroll_left + self.lanes.width * self.lanes.seconds_per_pixel;
-                let furthest = origins
-                    .iter()
-                    .fold(f32::MIN, |right, origin| right.max(origin.start));
-                let room = (view_right - furthest).max(0.0);
-                let shift = shift.min(room);
+                // TEMPORARY: what the drag saw, while the follow is checked.
+                log::debug!(
+                    "drag: seconds {seconds:.3} shift {shift:.3} \
+                     view_right {view_right:.3} scroll {scroll:.3} width {width:.1} spp {spp:.5}",
+                    view_right = self.lanes.scroll_left
+                        + self.lanes.width * self.lanes.seconds_per_pixel,
+                    scroll = self.lanes.scroll_left,
+                    width = self.lanes.width,
+                    spp = self.lanes.seconds_per_pixel,
+                );
                 let rows = nearest_row(lanes, row_top(lanes, anchor.row) + pixels) - anchor.row;
                 let count = self.timeline().tracks.len() as i32;
                 let moves: Vec<ClipMove> = origins

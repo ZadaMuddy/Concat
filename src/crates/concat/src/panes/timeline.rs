@@ -224,24 +224,69 @@ impl TimelinePane {
                 self.recentre(studio.playhead);
             }
         }
-        // One bound, after every message that can move the view - a scroll, a
-        // zoom, a resize, a fit - rather than one inside each of them. A
-        // centred (phone) view is the playhead's and keeps its own arithmetic.
-        if !self.centred {
-            let duration = studio.committed_duration();
-            // Nor may it zoom out past the cut and the room after it. Bounding
-            // only the scroll left this hole: once the view was wider than
-            // cut + SCROLL_PAST_END the left edge could only sit at zero, and
-            // the screen showed whole minutes of empty ground with the cut a
-            // strip in the middle of it, and nothing at either end to scroll
-            // to. The zoom is what bounds how much of the timeline is visible;
-            // the scroll only chooses which part of it.
-            if self.width > 1.0 {
-                let cap = (duration + SCROLL_PAST_END) / self.width;
-                self.seconds_per_pixel = self.seconds_per_pixel.min(cap.max(ZOOM_IN_LIMIT));
-            }
-            self.scroll_left = self.scroll_left.clamp(0.0, self.max_scroll(duration));
+        // Two bounds, after every message that can move the view - a scroll, a
+        // zoom, a resize, a fit - rather than one inside each of them.
+        //
+        // They are taken from different places on purpose. The zoom is a fact
+        // about the cut as committed: a drag that is extending the timeline
+        // should not also loosen how far the view may be zoomed out. The
+        // scroll is measured against the cut as the window is *showing* it,
+        // which during a gesture is the echo - the edit in flight - because
+        // the view has to follow a dragged clip out into the room the drag is
+        // opening for it.
+        let committed = studio.committed_duration();
+        let shown = studio.duration();
+        self.clamp_zoom(committed);
+        // Not while a gesture runs: the resting rule would either wall a drag
+        // that is extending the cut past the committed end, or - if it read
+        // the echo and the echo were rebuilt - collapse the bound under the
+        // view and yank the cut backwards mid-drag. It is applied again when
+        // the gesture ends; see `after_change`.
+        if !studio.gesturing() {
+            self.clamp_scroll(shown);
         }
+    }
+
+    /// The furthest the view may be zoomed out: the committed cut plus the
+    /// room after it filling the pane, and no further. Never a bound that
+    /// follows a gesture - see [`Self::clamp_scroll`].
+    pub fn clamp_zoom(&mut self, committed: f32) {
+        if self.centred || self.width <= 1.0 {
+            // A phone's view is the playhead's; a pane not yet laid out has
+            // no width to divide by.
+            return;
+        }
+        let cap = (committed + SCROLL_PAST_END) / self.width;
+        self.seconds_per_pixel = self.seconds_per_pixel.min(cap.max(ZOOM_IN_LIMIT));
+    }
+
+    /// The furthest the view may be scrolled: the cut plus the room after it,
+    /// less a screen. This is the **resting** rule.
+    ///
+    /// It is handed the cut as the window shows it, which during a gesture is
+    /// the echo - the edit in flight. That is deliberate: a clip dragged past
+    /// the end is extending the timeline, and the view has to be able to
+    /// follow it out there. Measured against the committed cut instead, the
+    /// drag is pinned at a line drawn before it began, which is a wall at
+    /// exactly the moment the person is trying to extend past it.
+    ///
+    /// The runaway this used to cause - the view chasing the clip forever - is
+    /// stopped at its source rather than here: the edge scroll moves only
+    /// while the pointer moves, so a hand held still carries nothing away.
+    ///
+    /// Called after every message that can move the view, and after every
+    /// change to the edit as well. A cut that gets shorter - a track removed
+    /// with its clips on it, an undo - can leave the view parked beyond the
+    /// new end, and then the edge scroll's own test, "there is somewhere
+    /// further to go", reads false for good: the timer never fires, so no
+    /// scroll message arrives to clamp it back, so it never fires.
+    pub fn clamp_scroll(&mut self, duration: f32) {
+        if self.centred {
+            // A phone's left edge is a fact about the playhead, not a scroll
+            // position; it keeps its own arithmetic.
+            return;
+        }
+        self.scroll_left = self.scroll_left.clamp(0.0, self.max_scroll(duration));
     }
 
     /// The lanes scrolled to `seconds` at their left edge. See `Scrolled`.

@@ -469,6 +469,19 @@ impl Studio {
         }
     }
 
+    /// True while a gesture is in flight: a drag, a trim, a move on the
+    /// stage. The echo exists exactly then.
+    ///
+    /// The view asks this before it clamps its scroll. `SCROLL_PAST_END` is a
+    /// resting rule - where the view may be left - and during a gesture it is
+    /// the wrong bound in both directions: measured against the committed cut
+    /// it walls a drag that is trying to extend past it, and measured against
+    /// the echo it can collapse under the view if the echo is rebuilt, which
+    /// yanks the cut backwards in the middle of the drag.
+    pub fn gesturing(&self) -> bool {
+        self.echo.is_some()
+    }
+
     /// The bookkeeping every change to the edit needs: the caches that
     /// follow the document, the autosave, the monitor and the mix.
     fn after_change(&mut self) {
@@ -490,6 +503,14 @@ impl Studio {
         self.ensure_stabilizers();
         self.ensure_voices();
         self.ensure_regions();
+        // The cut may have just got shorter - a track taken away with its
+        // clips, an undo - leaving the view parked past its new end, where
+        // the edge scroll could never fire again. See
+        // `TimelinePane::clamp_scroll`. The echo is gone by the time this
+        // runs, so the cut here is the committed one.
+        let duration = self.duration();
+        self.lanes.clamp_zoom(duration);
+        self.lanes.clamp_scroll(duration);
     }
 
     pub fn undo(&mut self) {
