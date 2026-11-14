@@ -13,6 +13,9 @@ gpu = []
 
 [dependencies]
 concat-core.workspace = true
+# The profiler's spans, so a preview frame's GPU work is timed where it is
+# recorded rather than guessed at from the far side of the event loop.
+concat-log.workspace = true
 log = "0.4"
 wgpu.workspace = true
 pollster.workspace = true

@@ -275,14 +275,15 @@ impl MonitorPane {
             // `Monitor::texture_of`.
             Ok(Picture::Sources(sources)) => {
                 let _t = concat_log::profile::Span::new("preview.texture");
-                studio
-                    .host
-                    .monitor
-                    .texture_of(&sources, spec)
-                    .and_then(|texture| {
-                        slint::Image::try_from(texture)
-                            .map_err(|error| format!("preview texture: {error}"))
-                    })
+                let rendered = {
+                    let _r = concat_log::profile::Span::new("preview.render");
+                    studio.host.monitor.texture_of(&sources, spec)
+                };
+                rendered.and_then(|texture| {
+                    let _i = concat_log::profile::Span::new("preview.import");
+                    slint::Image::try_from(texture)
+                        .map_err(|error| format!("preview texture: {error}"))
+                })
             }
             Ok(Picture::Pixels(bytes, width, height, _)) => {
                 let buffer = slint::SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(

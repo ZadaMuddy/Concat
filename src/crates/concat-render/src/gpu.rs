@@ -2339,14 +2339,28 @@ impl WgpuCompositor {
         if self.dead() {
             return None;
         }
-        let (draws, vertices) = self.prepare(plan);
-        self.write_vertices(&vertices);
-        let (canvas, canvas_texture, canvas_view) = self.canvas(plan.width, plan.height);
-        let texture = self.presentable(plan.width, plan.height);
+        let prepared = {
+            let _p = concat_log::profile::Span::new("gpu.prepare");
+            let (draws, vertices) = self.prepare(plan);
+            self.write_vertices(&vertices);
+            draws
+        };
+        let (canvas, canvas_texture, canvas_view, texture) = {
+            let _p = concat_log::profile::Span::new("gpu.targets");
+            let (canvas, canvas_texture, canvas_view) = self.canvas(plan.width, plan.height);
+            let texture = self.presentable(plan.width, plan.height);
+            (canvas, canvas_texture, canvas_view, texture)
+        };
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let mut encoder = self.encode(&canvas_view, &canvas_texture, &draws, clear_of(plan.canvas));
-        self.resolve(&mut encoder, (plan.width, plan.height), canvas, &view);
-        self.queue.submit([encoder.finish()]);
+        let mut encoder = self.encode(&canvas_view, &canvas_texture, &prepared, clear_of(plan.canvas));
+        {
+            let _p = concat_log::profile::Span::new("gpu.resolve");
+            self.resolve(&mut encoder, (plan.width, plan.height), canvas, &view);
+        }
+        {
+            let _p = concat_log::profile::Span::new("gpu.submit");
+            self.queue.submit([encoder.finish()]);
+        }
         self.retire();
         Some(texture)
     }
@@ -2904,6 +2918,9 @@ impl WgpuCompositor {
         } else {
             self.staging_for(frame.width(), frame.height())
         };
+        // The eight bits going up, and the pass that brings them into the
+        // working format: a shown frame's biggest single GPU cost.
+        let _uploading = concat_log::profile::Span::new("gpu.upload");
         self.queue.write_texture(
             wgpu::TexelCopyTextureInfo {
                 texture: &staging,
