@@ -208,6 +208,103 @@ pub fn dump(frame_draw: Duration) {
     if !leads.is_empty() {
         eprintln!("gaps:  {leads}");
     }
+    let mut grid = String::new();
+    for row in 0..REGION_ROWS {
+        if row > 0 {
+            grid.push_str(" / ");
+        }
+        for column in 0..REGION_COLUMNS {
+            let n = REGION_CALLS[row * REGION_COLUMNS + column].swap(0, Ordering::Relaxed);
+            grid.push_str(&format!("{n:>4}"));
+        }
+    }
+    eprintln!("regions (top to bottom, left to right): {grid}");
+    let components = take_components();
+    if !components.is_empty() {
+        let mut line = String::new();
+        for (index, component) in components.iter().take(10) {
+            if !line.is_empty() {
+                line.push_str(" · ");
+            }
+            line.push_str(&format!(
+                "c{index} {}x @({:.0},{:.0})",
+                component.count, component.min_x, component.min_y
+            ));
+        }
+        eprintln!("components (biggest first): {line}");
+    }
+}
+
+/// A quarter of the window, by index: which part of the screen an item is
+/// drawn in. Four columns and four rows, so a pane can be named by where it
+/// lives when the item types alone cannot say.
+pub const REGION_COLUMNS: usize = 4;
+pub const REGION_ROWS: usize = 4;
+const REGION_CELLS: usize = REGION_COLUMNS * REGION_ROWS;
+static REGION_CALLS: [AtomicU64; REGION_CELLS] = [ZERO; REGION_CELLS];
+
+/// Counts one drawn item into the region of the window it falls in.
+#[inline]
+pub fn region(x: f32, y: f32, width: f32, height: f32) {
+    if !(width > 0.0) || !(height > 0.0) {
+        return;
+    }
+    let column = ((x / width) * REGION_COLUMNS as f32) as i64;
+    let row = ((y / height) * REGION_ROWS as f32) as i64;
+    let column = column.clamp(0, REGION_COLUMNS as i64 - 1) as usize;
+    let row = row.clamp(0, REGION_ROWS as i64 - 1) as usize;
+    REGION_CALLS[row * REGION_COLUMNS + column].fetch_add(1, Ordering::Relaxed);
+}
+
+/// One component instance: a Slint component is its own item tree, so an
+/// item's tree says which pane, card or button it belongs to when the item
+/// types cannot.
+#[derive(Clone, Copy, Default)]
+pub struct Component {
+    pub count: u64,
+    pub short_side: f32,
+    pub min_x: f32,
+    pub min_y: f32,
+    pub max_x: f32,
+    pub max_y: f32,
+}
+
+static COMPONENTS: std::sync::Mutex<Vec<((usize, usize), Component)>> =
+    std::sync::Mutex::new(Vec::new());
+
+/// Counts a drawn item into its component instance.
+#[inline]
+pub fn component(key: (usize, usize), x: f32, y: f32, width: f32, height: f32) {
+    if !on() {
+        return;
+    }
+    let mut table = COMPONENTS.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let entry = match table.iter_mut().find(|(k, _)| *k == key) {
+        Some((_, entry)) => entry,
+        None => {
+            table.push((key, Component::default()));
+            &mut table.last_mut().expect("just pushed").1
+        }
+    };
+    entry.count += 1;
+    entry.short_side = width.min(height);
+    entry.min_x = if entry.count == 1 { x } else { entry.min_x.min(x) };
+    entry.min_y = if entry.count == 1 { y } else { entry.min_y.min(y) };
+    entry.max_x = entry.max_x.max(x + width);
+    entry.max_y = entry.max_y.max(y + height);
+}
+
+/// The component table, biggest first, and starts it over.
+pub fn take_components() -> Vec<(usize, Component)> {
+    let mut table = COMPONENTS.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let taken: Vec<(usize, Component)> = table
+        .drain(..)
+        .enumerate()
+        .map(|(index, (_, entry))| (index, entry))
+        .collect();
+    let mut taken = taken;
+    taken.sort_by_key(|(_, entry)| std::cmp::Reverse(entry.count));
+    taken
 }
 
 /// For a caller that wants a one-off read without a frame boundary.

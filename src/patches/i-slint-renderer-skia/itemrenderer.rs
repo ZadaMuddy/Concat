@@ -48,6 +48,44 @@ pub struct SkiaItemRenderer<'a> {
 }
 
 impl<'a> SkiaItemRenderer<'a> {
+    /// Counts the item into a quarter of the window, for the census: the
+    /// renderer knows no names, but it knows where a thing is drawn.
+    fn count_region(&self, item: &i_slint_core::items::ItemRc) {
+        if !super::paint_profile::enabled() {
+            return;
+        }
+        // `geometry()` is in the parent's coordinates: walk up to the window.
+        let mut rect = item.geometry();
+        let mut current = item.clone();
+        for _ in 0..64 {
+            let Some(parent) = current.parent_item(
+                i_slint_core::item_tree::ParentItemTraversalMode::FindAllParents,
+            ) else {
+                break;
+            };
+            let parent_rect = parent.geometry();
+            rect.origin.x += parent_rect.origin.x;
+            rect.origin.y += parent_rect.origin.y;
+            current = parent;
+        }
+        let size = self.window.size().to_logical(self.scale_factor.get());
+        super::paint_profile::region(
+            rect.origin.x,
+            rect.origin.y,
+            size.width,
+            size.height,
+        );
+        let tree = item.item_tree();
+        let key = (std::ptr::from_ref(tree).cast::<u8>() as usize, 0);
+        super::paint_profile::component(
+            key,
+            rect.origin.x,
+            rect.origin.y,
+            rect.size.width,
+            rect.size.height,
+        );
+    }
+
     pub fn new(
         canvas: &'a skia_safe::Canvas,
         window: &'a i_slint_core::api::Window,
@@ -526,10 +564,11 @@ impl ItemRenderer for SkiaItemRenderer<'_> {
     fn draw_rectangle(
         &mut self,
         rect: Pin<&dyn i_slint_core::item_rendering::RenderRectangle>,
-        _self_rc: &i_slint_core::items::ItemRc,
+        self_rc: &i_slint_core::items::ItemRc,
         size: LogicalSize,
         _cache: &CachedRenderingData,
     ) {
+        self.count_region(self_rc);
         let _paint = super::paint_profile::Scope::new(super::paint_profile::RECT);
         let geometry = PhysicalRect::from(size * self.scale_factor);
         if geometry.is_empty() {
@@ -551,10 +590,11 @@ impl ItemRenderer for SkiaItemRenderer<'_> {
     fn draw_border_rectangle(
         &mut self,
         rect: Pin<&dyn i_slint_core::item_rendering::RenderBorderRectangle>,
-        _self_rc: &i_slint_core::items::ItemRc,
+        self_rc: &i_slint_core::items::ItemRc,
         size: LogicalSize,
         _: &CachedRenderingData,
     ) {
+        self.count_region(self_rc);
         let _paint = super::paint_profile::Scope::new(super::paint_profile::BORDER);
         let Some(layout) = BorderRectLayout::new(rect, size, self.scale_factor) else {
             return;
@@ -608,6 +648,7 @@ impl ItemRenderer for SkiaItemRenderer<'_> {
         size: LogicalSize,
         _cache: &CachedRenderingData,
     ) {
+        self.count_region(self_rc);
         let _paint = super::paint_profile::Scope::new(super::paint_profile::IMAGE);
         let geometry = PhysicalRect::from(size * self.scale_factor);
         if geometry.is_empty() {
@@ -623,6 +664,7 @@ impl ItemRenderer for SkiaItemRenderer<'_> {
         size: LogicalSize,
         _cache: &CachedRenderingData,
     ) {
+        self.count_region(self_rc);
         let _paint = super::paint_profile::Scope::new(super::paint_profile::TEXT);
         let restore = self.save_canvas_and_pixel_align_origin();
         sharedparley::draw_text(self, text, Some(self_rc), size, Some(self.text_layout_cache));
@@ -651,6 +693,7 @@ impl ItemRenderer for SkiaItemRenderer<'_> {
         item_rc: &i_slint_core::items::ItemRc,
         size: LogicalSize,
     ) {
+        self.count_region(item_rc);
         let _paint = super::paint_profile::Scope::new(super::paint_profile::PATH);
         let geometry = PhysicalRect::from(size * self.scale_factor);
 
