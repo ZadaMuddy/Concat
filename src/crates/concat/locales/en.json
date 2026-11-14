@@ -1023,6 +1023,7 @@
   "voiceover.failed": "Couldn't record: {0}",
   "voiceover.fast": "Fast",
   "voiceover.inputGain": "Input gain",
+  "voiceover.monitor": "Hear the microphone live",
   "voiceover.muteTimeline": "Mute timeline while recording",
   "voiceover.noMicrophone": "No microphone",
   "voiceover.opening": "Opening the microphone…",

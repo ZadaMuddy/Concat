@@ -502,6 +502,7 @@ export component App inherits Window {
     callback voiceover-device-changed(index: int);
     callback voiceover-countdown-changed(on: bool);
     callback voiceover-mute-changed(on: bool);
+    callback voiceover-monitor-changed(on: bool);
     callback voiceover-gain-changed(db: float);
     callback voiceover-prompt-edited(text: string);
     callback voiceover-prompt-speed-changed(index: int);
@@ -829,6 +830,7 @@ export component App inherits Window {
         device-changed(index) => { root.voiceover-device-changed(index); }
         countdown-changed(on) => { root.voiceover-countdown-changed(on); }
         mute-changed(on) => { root.voiceover-mute-changed(on); }
+        monitor-changed(on) => { root.voiceover-monitor-changed(on); }
         gain-changed(db) => { root.voiceover-gain-changed(db); }
         prompt-edited(text) => { root.voiceover-prompt-edited(text); }
         prompt-speed-changed(index) => { root.voiceover-prompt-speed-changed(index); }

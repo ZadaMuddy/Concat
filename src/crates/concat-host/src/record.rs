@@ -22,6 +22,7 @@
 use std::fs::File;
 use std::io::{BufWriter, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
@@ -29,6 +30,12 @@ use std::time::{Duration, Instant};
 /// A sample at or past this is a sample the converter could not hold: the
 /// meter's clip light.
 const CLIP: f32 = 0.999;
+
+/// How much of the played-back input the echo keeps before it starts
+/// dropping the oldest: a fifth of a second. A speaker clock that runs
+/// slower than the microphone's would otherwise grow the queue until the
+/// echo fell behind the mouth by a second or more.
+const ECHO_SECONDS: f32 = 0.2;
 
 /// The microphones the system offers, by the names it gives them, the
 /// default first when it says which that is. Empty when there are none or
@@ -106,6 +113,12 @@ struct Shared {
     heard: AtomicBool,
     /// What went wrong with the device after it opened: unplugged, taken.
     failed: Mutex<Option<String>>,
+    /// The input is being played back as it arrives: the echo a voiceover
+    /// hears of its own microphone, through the same gain a take gets - so
+    /// it sounds like the take will sound.
+    monitor: AtomicBool,
+    /// Samples on their way to the speakers, mono, at the device's rate.
+    echo: Mutex<VecDeque<f32>>,
 }
 
 impl Shared {
@@ -118,6 +131,8 @@ impl Shared {
             written: AtomicU64::new(0),
             heard: AtomicBool::new(false),
             failed: Mutex::new(None),
+            monitor: AtomicBool::new(false),
+            echo: Mutex::new(VecDeque::new()),
         }
     }
 
@@ -133,6 +148,18 @@ impl Shared {
         }
         if !self.heard.load(Ordering::Relaxed) && mono.iter().any(|sample| *sample != 0.0) {
             self.heard.store(true, Ordering::Relaxed);
+        }
+        // The same samples the take gets, to the speakers as they come in.
+        // A queue the window has locked is skipped rather than waited for:
+        // the callback is the microphone's, and it must not block.
+        if self.monitor.load(Ordering::Relaxed)
+            && let Ok(mut echo) = self.echo.try_lock()
+        {
+            echo.extend(mono.iter().copied());
+            let cap = (ECHO_SECONDS * 48_000.0) as usize;
+            while echo.len() > cap.max(4096) {
+                echo.pop_front();
+            }
         }
         if !self.writing.load(Ordering::Relaxed) {
             return None;
@@ -150,6 +177,8 @@ impl Shared {
 enum Event {
     /// Samples for the take.
     Samples(Vec<i16>),
+    /// Play the input back as it arrives, or stop: with the answer.
+    Monitor(bool, mpsc::Sender<Result<(), String>>),
     /// Start a take in this file.
     Begin(PathBuf, mpsc::Sender<Result<(), String>>),
     /// Finish the take.
@@ -258,6 +287,17 @@ impl Microphone {
         self.shared.heard.load(Ordering::Relaxed)
     }
 
+    /// Plays the input back as it arrives - what the take will sound like,
+    /// through the same gain - or stops. Blocking: the answer is whether
+    /// the speakers could be opened at all.
+    pub fn monitor(&self, on: bool) -> Result<(), String> {
+        let (reply, answer) = mpsc::channel();
+        let _ = self.events.send(Event::Monitor(on, reply));
+        answer
+            .recv()
+            .unwrap_or_else(|_| Err("the recording thread stopped".to_owned()))
+    }
+
     /// The input gain, linear: what every sample is multiplied by before it
     /// is measured or kept.
     pub fn set_gain(&self, gain: f32) {
@@ -343,9 +383,40 @@ fn run(
     };
 
     let mut takes = Takes::new(rate, Arc::clone(shared));
+    // The speakers, while the echo is on. Dropped when it goes off, which
+    // is what stops the sound.
+    let mut echo: Option<cpal::Stream> = None;
     loop {
         match inbox.recv_timeout(Duration::from_millis(250)) {
             Ok(Event::Close) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            Ok(Event::Monitor(on, answer)) => {
+                if on {
+                    if echo.is_none() {
+                        match monitor_stream(rate, shared) {
+                            Ok(stream) => echo = Some(stream),
+                            Err(error) => {
+                                shared.monitor.store(false, Ordering::Relaxed);
+                                let _ = answer.send(Err(error));
+                                continue;
+                            }
+                        }
+                    }
+                    shared.monitor.store(true, Ordering::Relaxed);
+                    log::info!(
+                        "voice: the echo is on - the microphone heard through the speakers at {} Hz",
+                        rate
+                    );
+                    let _ = answer.send(Ok(()));
+                } else {
+                    echo = None;
+                    log::info!("voice: the echo is off");
+                    shared.monitor.store(false, Ordering::Relaxed);
+                    if let Ok(mut queue) = shared.echo.lock() {
+                        queue.clear();
+                    }
+                    let _ = answer.send(Ok(()));
+                }
+            }
             Ok(event) => takes.handle(event),
             Err(mpsc::RecvTimeoutError::Timeout) => {}
         }
@@ -391,6 +462,9 @@ impl Takes {
 
     fn handle(&mut self, event: Event) {
         match event {
+            // The echo is the audio thread's own: the loop that owns this
+            // takes the event for itself and never passes it on.
+            Event::Monitor(..) => {}
             Event::Samples(samples) => {
                 let Some((_, writer)) = self.open.as_mut() else {
                     return;
@@ -496,6 +570,90 @@ where
             None,
         )
         .map_err(|error| format!("the microphone would not open: {error}"))
+}
+
+/// Opens the speakers for the echo. The microphone's own rate is asked for
+/// first, so nothing is resampled and the voice sounds as the take will;
+/// a speaker that will not take it plays at its own rate, sampled across.
+fn monitor_stream(rate: u32, shared: &Arc<Shared>) -> Result<cpal::Stream, String> {
+    use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+
+    let host = cpal::default_host();
+    let device = host
+        .default_output_device()
+        .ok_or_else(|| "no speaker was found to play the microphone through".to_owned())?;
+    let supported = device
+        .supported_output_configs()
+        .map_err(|error| format!("the speakers would not say what they play: {error}"))?
+        .filter(|range| range.min_sample_rate().0 <= rate && rate <= range.max_sample_rate().0)
+        .max_by_key(|range| range.channels())
+        .map(|range| range.with_sample_rate(cpal::SampleRate(rate)))
+        .or_else(|| device.default_output_config().ok())
+        .ok_or_else(|| "the speakers would not say what they play".to_owned())?;
+    let config: cpal::StreamConfig = supported.config();
+    let stream = match supported.sample_format() {
+        cpal::SampleFormat::F32 => output::<f32>(&device, &config, rate, shared),
+        cpal::SampleFormat::I16 => output::<i16>(&device, &config, rate, shared),
+        cpal::SampleFormat::U16 => output::<u16>(&device, &config, rate, shared),
+        cpal::SampleFormat::I32 => output::<i32>(&device, &config, rate, shared),
+        other => Err(format!(
+            "the speakers play {other:?} samples, which Concat does not write"
+        )),
+    }?;
+    stream
+        .play()
+        .map_err(|error| format!("the speakers would not start: {error}"))?;
+    Ok(stream)
+}
+
+/// One buffer on its way to the speakers: the echo queue, resampled to the
+/// speakers' rate when they would not take the microphone's. Sample and
+/// hold rather than an interpolator: a monitor is for judging the take, and
+/// a held sample at a one-in-ten rate difference is inaudible.
+fn output<T>(
+    device: &cpal::Device,
+    config: &cpal::StreamConfig,
+    mic_rate: u32,
+    shared: &Arc<Shared>,
+) -> Result<cpal::Stream, String>
+where
+    T: cpal::SizedSample,
+    T: cpal::FromSample<f32>,
+{
+    use cpal::traits::DeviceTrait;
+
+    let channels = usize::from(config.channels.max(1));
+    let step = f64::from(mic_rate) / f64::from(config.sample_rate.0.max(1));
+    let shared = Arc::clone(shared);
+    let mut owed = 0.0f64;
+    device
+        .build_output_stream(
+            config,
+            move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
+                let Ok(mut queue) = shared.echo.try_lock() else {
+                    for out in data.iter_mut() {
+                        *out = T::from_sample(0.0f32);
+                    }
+                    return;
+                };
+                for frame in data.chunks_mut(channels) {
+                    let mut sample = 0.0f32;
+                    owed += 1.0;
+                    while owed >= step {
+                        // An empty queue is an underrun, and the frame is
+                        // silence: the echo is a monitor, not a take.
+                        sample = queue.pop_front().unwrap_or(0.0);
+                        owed -= step;
+                    }
+                    for out in frame.iter_mut() {
+                        *out = T::from_sample(sample);
+                    }
+                }
+            },
+            move |error| log::warn!("monitor: {error}"),
+            None,
+        )
+        .map_err(|error| format!("the speakers would not open: {error}"))
 }
 
 /// Interleaved samples of `channels` channels as mono - the mean of each

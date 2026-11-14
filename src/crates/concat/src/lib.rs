@@ -2386,6 +2386,9 @@ fn start(project: Option<std::path::PathBuf>, smoke: bool) -> Result<(), slint::
     app.on_voiceover_mute_changed(on_window!(|state, on: bool| {
         state.handle(Msg::Voiceover(VoiceoverMsg::Mute(on)));
     }));
+    app.on_voiceover_monitor_changed(on_window!(|state, on: bool| {
+        state.handle(Msg::Voiceover(VoiceoverMsg::Monitor(on)));
+    }));
     app.on_voiceover_gain_changed(on_window!(|state, db: f32| {
         state.handle(Msg::Voiceover(VoiceoverMsg::Gain(db)));
     }));

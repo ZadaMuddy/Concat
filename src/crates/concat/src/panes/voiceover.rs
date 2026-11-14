@@ -63,6 +63,9 @@ pub enum VoiceoverMsg {
     Device(i32),
     Countdown(bool),
     Mute(bool),
+    /// Hear the microphone as the take will: the input through its gain,
+    /// played back live.
+    Monitor(bool),
     /// The input gain, in decibels.
     Gain(f32),
     /// The teleprompter's script, as typed.
@@ -103,6 +106,7 @@ impl std::fmt::Debug for VoiceoverMsg {
             Self::Device(index) => write!(f, "Device({index})"),
             Self::Countdown(on) => write!(f, "Countdown({on})"),
             Self::Mute(on) => write!(f, "Mute({on})"),
+            Self::Monitor(on) => write!(f, "Monitor({on})"),
             Self::Gain(db) => write!(f, "Gain({db})"),
             Self::Prompt(text) => write!(f, "Prompt({} chars)", text.chars().count()),
             Self::PromptSpeed(index) => write!(f, "PromptSpeed({index})"),
@@ -230,6 +234,9 @@ pub struct VoiceoverPane {
     /// can, so a voiceover reads as one line under the picture.
     lane: Option<String>,
     prompt: String,
+    /// The echo is wanted: the panel's switch, remembered while the
+    /// microphone is being opened so it can be applied when it is.
+    monitor: bool,
     /// Feeds the meter while the panel is open.
     meter: Option<slint::Timer>,
     /// Beats the count-in.
@@ -336,6 +343,18 @@ impl VoiceoverPane {
                     studio.host.playback.set_muted(on);
                 }
             }
+            VoiceoverMsg::Monitor(on) => {
+                self.monitor = on;
+                // Wanted before the microphone is open: `opened` applies it
+                // as soon as there is something to echo.
+                let Some(mic) = self.mic.as_ref() else {
+                    return;
+                };
+                if let Err(error) = mic.monitor(on) {
+                    self.monitor = false;
+                    self.error = Some(error);
+                }
+            }
             VoiceoverMsg::Gain(db) => {
                 let db = db.clamp(GAIN_FLOOR, GAIN_CEILING);
                 studio.prefs.voiceover.gain_db = db;
@@ -371,6 +390,7 @@ impl VoiceoverPane {
             device: self.device as i32,
             countdown: prefs.countdown,
             mute: prefs.mute,
+            monitor: self.monitor,
             gain: prefs.gain_db,
             error: self.error.clone().unwrap_or_default().into(),
             can_retake: self.can_retake(studio),
@@ -472,6 +492,15 @@ impl VoiceoverPane {
                 self.opened = Some(Instant::now());
                 self.meter = Some(meter());
                 self.error = None;
+                // The echo, if it was switched on while this microphone was
+                // still opening.
+                if self.monitor
+                    && let Some(mic) = self.mic.as_ref()
+                    && let Err(error) = mic.monitor(true)
+                {
+                    self.monitor = false;
+                    self.error = Some(error);
+                }
             }
             Err(error) => {
                 log::warn!(
@@ -495,6 +524,7 @@ impl VoiceoverPane {
         self.open = false;
         self.waiting = false;
         self.mic = None;
+        self.monitor = false;
         self.meter = None;
         self.opened = None;
         self.error = None;

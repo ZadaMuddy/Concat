@@ -43,6 +43,8 @@ export struct VoiceoverData {
     countdown: bool,
     /// The timeline is silent while a take records.
     mute: bool,
+    /// The input is played back live, through the gain a take gets.
+    monitor: bool,
     /// The input gain, in decibels.
     gain: float,
     /// Why there is no microphone, or what last went wrong; empty when
@@ -159,6 +161,7 @@ export component VoiceoverPanel inherits Rectangle {
     callback device-changed(index: int);
     callback countdown-changed(on: bool);
     callback mute-changed(on: bool);
+    callback monitor-changed(on: bool);
     callback gain-changed(db: float);
     callback prompt-edited(text: string);
     callback prompt-speed-changed(index: int);
@@ -493,6 +496,15 @@ export component VoiceoverPanel inherits Rectangle {
                     label: I18n.t("voiceover.muteTimeline");
                     checked: root.data.mute;
                     toggled(on) => { root.mute-changed(on); }
+                }
+                // The microphone in the speakers as it is heard, through the
+                // same gain a take is written with: what the take will sound
+                // like, before committing to one.
+                ChoiceRow {
+                    label: I18n.t("voiceover.monitor");
+                    checked: root.data.monitor;
+                    enabled: root.data.ready;
+                    toggled(on) => { root.monitor-changed(on); }
                 }
             }
 
