@@ -1299,8 +1299,17 @@ export component Lanes inherits Rectangle {
     /// exactly under the cursor on the frame the pointer moved, while the
     /// engine catches up behind it and the monitor redraws at its own pace.
     /// By the time the drag ends the two are the same place.
+    ///
+    /// One exception, and it is the point of snapping: while the drag is
+    /// held on a cut, the line is drawn at the cut, not at the pointer. A
+    /// line that runs on under the cursor while the playhead has already
+    /// stopped on the edge hides the snap completely - the hand cannot see
+    /// the thing it asked for until it lets go (reported 2026-11-14). The
+    /// pointer still decides; the line only reports where it landed.
     property <float> playhead-shown: root.scrubbing
-        ? Math.max(0, root.seconds-at(root.pointer-x))
+        ? (root.snap-line >= 0
+            ? root.snap-line
+            : Math.max(0, root.seconds-at(root.pointer-x)))
         : root.playhead;
     /// The instant the trim in flight snapped onto, in seconds, or -1 for
     /// none. Drawn as the hairline below; see `Studio::snap_mark`.
@@ -2242,7 +2251,8 @@ export component Lanes inherits Rectangle {
         //
         // A line and not a band, in the accent the razor draws with: it marks
         // one instant, and it goes when the gesture does.
-        if root.snap-line >= 0 && root.at(root.snap-line) >= 0px
+        if root.snap-line >= 0 && (root.scrubbing || root.clip-dragging)
+            && root.at(root.snap-line) >= 0px
             && root.at(root.snap-line) <= root.width: Rectangle {
             x: root.at(root.snap-line);
             y: root.ruler-height;

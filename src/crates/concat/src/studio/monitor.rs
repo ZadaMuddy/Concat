@@ -381,6 +381,9 @@ impl Studio {
         if self.playing {
             self.pause();
         }
+        // A scrub that lands where it was put has no snap to show; the
+        // hairline and the held line below go with the gesture that set them.
+        self.snap_mark = None;
         self.seek(seconds.max(0.0));
         if self.coast.tracking {
             let at = self.coast.clock();
@@ -394,8 +397,18 @@ impl Studio {
     /// stop on one frame is never moved off it by a cut half a pixel away.
     pub fn scrub_snapped(&mut self, seconds: f32) {
         let threshold = 8.0 * self.lanes.seconds_per_pixel;
-        let at = self.snapped_instant(seconds.max(0.0), threshold);
+        let asked = seconds.max(0.0);
+        let at = self.snapped_instant(asked, threshold);
         self.scrub(at);
+        // Held on the edge it snapped to, so the drag shows the hold rather
+        // than sliding past it: the lanes draw the line at this instant and
+        // the hairline across it while the gesture lasts. `scrub` cleared it
+        // a moment ago, which is why this is set after.
+        self.snap_mark = ((at - asked).abs() > 1e-4).then_some(at);
+        log::debug!(
+            "snap: drag asked {asked:.4}, got {at:.4}, threshold {threshold:.4} s (8 px), snap {}",
+            self.lanes.snap
+        );
     }
 
     /// The finger that dragged the phone's lanes along the cut has let go:
