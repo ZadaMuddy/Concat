@@ -33,8 +33,10 @@ pub const WINDOW_BACKGROUND: usize = 10;
 /// is the item tree being walked - geometry, clipping, visibility - and is
 /// where a frame's time goes when the draw calls themselves are cheap.
 pub const GAP: usize = 11;
+/// The renderer working out what changed, before anything is drawn.
+pub const DAMAGE: usize = 12;
 
-pub const KINDS: usize = 12;
+pub const KINDS: usize = 13;
 pub const NAMES: [&str; KINDS] = [
     "image",
     "rect",
@@ -48,6 +50,7 @@ pub const NAMES: [&str; KINDS] = [
     "glyph",
     "background",
     "gap",
+    "damage",
 ];
 
 const ZERO: AtomicU64 = AtomicU64::new(0);
@@ -105,7 +108,18 @@ thread_local! {
 /// Starts a frame: the first draw call's gap is then the frame's setup.
 pub fn frame_start() {
     if on() {
-        LAST.with(|last| last.set(None));
+        // Not None: the frame begins now, so the first draw call's gap is
+        // the frame's own setup - everything before the first item.
+        LAST.with(|last| last.set(Some(Instant::now())));
+    }
+}
+
+
+/// Records a duration measured by the caller, under a kind.
+pub fn record(kind: usize, took: Duration) {
+    if on() {
+        NANOS[kind].fetch_add(took.as_nanos() as u64, Ordering::Relaxed);
+        CALLS[kind].fetch_add(1, Ordering::Relaxed);
     }
 }
 

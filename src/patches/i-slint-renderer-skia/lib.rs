@@ -845,11 +845,16 @@ impl SkiaRenderer {
                     Some(LogicalRect::from_size(logical_window_size).into())
                 };
 
+                let damage_start = std::time::Instant::now();
                 let dirty_region_for_this_frame = partial_rendering_state.apply_dirty_region(
                     &mut partial_renderer,
                     components,
                     logical_window_size,
                     buffer_dirty_region,
+                );
+                crate::paint_profile::record(
+                    crate::paint_profile::DAMAGE,
+                    damage_start.elapsed(),
                 );
 
                 if matches!(self.dirty_region_debug_mode, DirtyRegionDebugMode::Log) {
