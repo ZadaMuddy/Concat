@@ -204,7 +204,11 @@ impl Monitor {
         settings: &DocumentSettings,
         spec: FrameSpec,
     ) -> Result<concat_export::PreviewSources, String> {
-        let plan = self.plan_for(clips, settings, spec);
+        let plan = {
+            let _t = concat_log::profile::Span::new("preview.plan");
+            self.plan_for(clips, settings, spec)
+        };
+        let _pull = concat_log::profile::Span::new("preview.pull");
         concat_export::preview_sources_of(&self.pool, &plan, spec.time, spec.proxy, spec.nearest)
     }
 
@@ -327,15 +331,22 @@ impl Monitor {
         settings: &DocumentSettings,
         spec: FrameSpec,
     ) -> Result<(Vec<u8>, bool), String> {
-        let plan = self.plan_for(clips, settings, spec);
-        let sources = concat_export::preview_sources_of(
-            &self.pool,
-            &plan,
-            spec.time,
-            spec.proxy,
-            spec.nearest,
-        )?;
+        let plan = {
+            let _t = concat_log::profile::Span::new("preview.plan");
+            self.plan_for(clips, settings, spec)
+        };
+        let sources = {
+            let _t = concat_log::profile::Span::new("preview.pull");
+            concat_export::preview_sources_of(
+                &self.pool,
+                &plan,
+                spec.time,
+                spec.proxy,
+                spec.nearest,
+            )?
+        };
         let exact = sources.exact();
+        let _composite = concat_log::profile::Span::new("preview.composite");
         sources.pixels().map(|pixels| (pixels, exact))
     }
 

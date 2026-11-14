@@ -34,6 +34,7 @@ mod file;
 mod filter;
 mod line;
 mod op;
+pub mod profile;
 mod repeat;
 
 use std::cell::RefCell;
@@ -46,6 +47,7 @@ pub use clock::span;
 pub use file::{CAP, HEAD, KEEP, PreviousRun, TAIL};
 pub use filter::{Filter, level_name, level_named};
 pub use op::Op;
+pub use profile::Span;
 
 use console::Console;
 use file::{Limits, RunFile};

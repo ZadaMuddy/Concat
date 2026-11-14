@@ -992,6 +992,7 @@ impl ReaderPool {
     /// cached, so a compositor that remembers what it uploaded by the
     /// frame's identity uploads it once.
     pub fn frame(&self, request: &FrameRequest) -> Result<Arc<Frame>> {
+        let _t = concat_log::profile::Span::new("media.frame");
         let (facts, source_key) = self.locate(request)?;
         let (width, height) = request.size;
         let plain = request.pre.is_none()
@@ -1319,6 +1320,7 @@ impl ReaderPool {
     fn source_frame(&self, facts: &MediaFacts, key: &SourceKey) -> Result<Arc<Frame>> {
         if let Some(frame) = self.cached_source(key) {
             Self::count(&self.counters.source_hits);
+            concat_log::profile::count("media.hit");
             return Ok(frame);
         }
         let path = key.path.as_path();
@@ -1335,6 +1337,9 @@ impl ReaderPool {
         let mut reader = shared.lock().map_err(|_| crate::error::Error::NoFrame {
             path: path.to_path_buf(),
         })?;
+        // Whatever the reader does from here - walking from a keyframe,
+        // decoding one picture, copying it out - is the decode.
+        let _decode = concat_log::profile::Span::new("media.decode");
         // Another caller may have moved this reader while this one waited
         // for it; the answer may even be cached by now.
         if let Some(frame) = self.cached_source(key) {

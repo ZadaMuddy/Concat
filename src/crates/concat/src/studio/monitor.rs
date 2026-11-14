@@ -235,6 +235,28 @@ impl Studio {
             std::time::Duration::from_millis(8),
             move || {
                 crate::host::Shell::with(|shell, app| {
+                    let _t = concat_log::profile::Span::new("transport.tick");
+                    // The gap since the last tick is the loop's turnaround:
+                    // the timer asks for one every 8 ms, so anything longer
+                    // is the window's paint and whatever else the event loop
+                    // did in between. This is where a frame budget shows.
+                    {
+                        use std::sync::atomic::{AtomicU64, Ordering};
+                        static EPOCH: std::sync::OnceLock<std::time::Instant> =
+                            std::sync::OnceLock::new();
+                        static LAST: AtomicU64 = AtomicU64::new(0);
+                        let now = EPOCH
+                            .get_or_init(std::time::Instant::now)
+                            .elapsed()
+                            .as_micros() as u64;
+                        let last = LAST.swap(now, Ordering::Relaxed);
+                        if last != 0 && now > last {
+                            concat_log::profile::add(
+                                "loop.tick_gap",
+                                std::time::Duration::from_micros(now - last),
+                            );
+                        }
+                    }
                     {
                         let mut studio = shell.studio.borrow_mut();
                         let end = studio.duration();

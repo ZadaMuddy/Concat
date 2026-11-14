@@ -137,6 +137,9 @@ pub fn open_logging(extra: Option<Box<dyn log::Log>>) {
             "log: wanted a file for this run's log and there is none: {error}; it goes to the console only"
         );
     }
+    // The profiler, if `CONCAT_PROFILE` asked for it: its table goes to the
+    // log this just opened, so it starts after it.
+    concat_log::profile::start();
     // The launch, timed from here to the window's first publish.
     if let Ok(mut slot) = STARTING.lock() {
         *slot = Some(concat_log::op!("start"));

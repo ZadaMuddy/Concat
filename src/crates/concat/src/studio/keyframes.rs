@@ -2106,6 +2106,7 @@ impl Studio {
     /// Asks the workers for anything the launch screen or the bin is
     /// missing. Separate from `publish` because it mutates.
     pub fn refresh_art(&mut self) {
+        let _t = concat_log::profile::Span::new("lanes.art");
         // Called after every callback, the pointer stream included. The
         // scan over every media item - stats for proxies, JPEGs read back,
         // decodes queued - runs when the document, the screen or what is

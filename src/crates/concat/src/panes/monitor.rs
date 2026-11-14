@@ -216,6 +216,7 @@ impl MonitorPane {
                 self.busy = false;
                 let fps = studio.project().active().video.rate();
                 let wait = self.asked.take().map(|at| at.elapsed()).unwrap_or_default();
+                concat_log::profile::add("preview.wait", wait);
                 if spec.moving && result.is_ok() {
                     self.cadence
                         .count((spec.time * fps + 1e-6).floor() as i64, wait);
@@ -265,20 +266,24 @@ impl MonitorPane {
 
     /// Puts a worker's frame on the monitor, or says once why it could not.
     fn show(&mut self, result: Result<Picture, String>, spec: FrameSpec, studio: &mut Studio) {
+        let _t = concat_log::profile::Span::new("preview.show");
         let exact = result.as_ref().map_or(true, Picture::exact);
         let picture = match result {
             // Drawn here and not on the worker: this is the event loop,
             // the one thread the window's renderer submits from, and a
             // second thread submitting beside it hangs the GPU - see
             // `Monitor::texture_of`.
-            Ok(Picture::Sources(sources)) => studio
-                .host
-                .monitor
-                .texture_of(&sources, spec)
-                .and_then(|texture| {
-                    slint::Image::try_from(texture)
-                        .map_err(|error| format!("preview texture: {error}"))
-                }),
+            Ok(Picture::Sources(sources)) => {
+                let _t = concat_log::profile::Span::new("preview.texture");
+                studio
+                    .host
+                    .monitor
+                    .texture_of(&sources, spec)
+                    .and_then(|texture| {
+                        slint::Image::try_from(texture)
+                            .map_err(|error| format!("preview texture: {error}"))
+                    })
+            }
             Ok(Picture::Pixels(bytes, width, height, _)) => {
                 let buffer = slint::SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(
                     &bytes, width, height,
@@ -291,6 +296,7 @@ impl MonitorPane {
             Ok(image) => {
                 self.image = image;
                 self.inexact = !exact;
+                concat_log::profile::shown();
             }
             Err(error) => {
                 log::warn!(
@@ -370,6 +376,7 @@ impl MonitorPane {
     /// and the exact one on [`Lane::Refine`] once it rests. A single move
     /// is asked for exactly, so one step back never flashes another frame.
     fn request(&mut self, studio: &mut Studio, lane: Lane) {
+        let _t = concat_log::profile::Span::new("preview.request");
         if studio.on_start || studio.session.is_none() {
             return;
         }
@@ -445,14 +452,18 @@ impl MonitorPane {
             move || {
                 // On the window's device the frame stays a texture; without
                 // one it comes back as pixels and is uploaded here.
-                let frame = if monitor.has_gpu() {
-                    monitor
-                        .frame_sources(Arc::clone(&clips), &settings, spec)
-                        .map(Picture::Sources)
-                } else {
-                    monitor
-                        .frame_pixels(Arc::clone(&clips), &settings, spec)
-                        .map(|(bytes, exact)| Picture::Pixels(bytes, width, height, exact))
+                concat_log::profile::requested();
+                let frame = {
+                    let _t = concat_log::profile::Span::new("preview.decode");
+                    if monitor.has_gpu() {
+                        monitor
+                            .frame_sources(Arc::clone(&clips), &settings, spec)
+                            .map(Picture::Sources)
+                    } else {
+                        monitor
+                            .frame_pixels(Arc::clone(&clips), &settings, spec)
+                            .map(|(bytes, exact)| Picture::Pixels(bytes, width, height, exact))
+                    }
                 };
                 // Decode-ahead for whatever comes next, on a worker of its
                 // own, so the frame goes to the window without waiting for

@@ -8,6 +8,9 @@ description = "Getting pixels and samples in and out of media files. The only cr
 
 [dependencies]
 concat-core.workspace = true
+# The profiler's spans, so a decode can be timed where it happens rather
+# than inferred from the far side of a queue.
+concat-log.workspace = true
 # Linked FFmpeg: the safe wrapper over libavformat, libavcodec, libavfilter,
 # libswscale and libswresample. Built against the FFmpeg development
 # libraries on the machine - pkg-config where there is one, FFMPEG_DIR

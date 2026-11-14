@@ -227,6 +227,7 @@ impl Studio {
     /// paint rather than in the handler. So a scrub publishes its three
     /// values and leaves the models alone.
     pub fn publish_scrub(&self, app: &App, _models: &Models) {
+        let _t = concat_log::profile::Span::new("publish.scrub");
         let editor = app.global::<Editor>();
         editor.set_playhead(self.playhead);
         editor.set_scroll_left(self.lanes.scroll_left);
@@ -236,6 +237,7 @@ impl Studio {
     /// The timeline and the readouts that follow it: what runs on every
     /// event of a scrub, a drag, a trim or a knob.
     pub fn publish_lanes(&self, app: &App, models: &Models) {
+        let _t = concat_log::profile::Span::new("publish.lanes");
         let editor = app.global::<Editor>();
         let project = self.project();
         sync(
