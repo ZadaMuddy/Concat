@@ -355,6 +355,13 @@ impl crate::Surface for WGPUSurface {
             return Err("WGPUSurface::render() called on offscreen surface".into());
         };
 
+        // Concat, a profiling probe: where the window's frame goes. Acquire
+        // is the compositor handing over a frame, draw is the item tree being
+        // turned into Skia commands, submit is Skia's GPU work going out, and
+        // present is the hand-back. Printed every twentieth frame to stderr,
+        // because a stdout redirect is how a headless run reads it.
+        let frame_start = std::time::Instant::now();
+
         let gr_context = &mut self.gr_context.borrow_mut();
 
         let frame = match surface.get_current_texture() {
@@ -380,6 +387,8 @@ impl crate::Surface for WGPUSurface {
                 }
             }
         };
+
+        let acquired = frame_start.elapsed();
 
         // Skia renders through the raw backend queue, invisible to wgpu's usage
         // tracking, so `Queue::present` would treat the frame as never written
@@ -407,6 +416,7 @@ impl crate::Surface for WGPUSurface {
             multiview_mask: None,
         });
         self.wgpu.queue.submit(Some(encoder.finish()));
+        let cleared = frame_start.elapsed();
 
         let skia_surface = self.backend.make_swapchain_surface(gr_context, &frame.texture);
 
@@ -414,10 +424,12 @@ impl crate::Surface for WGPUSurface {
             .ok_or_else(|| PlatformError::from("Failed to create Skia surface from WGPU"))?;
 
         callback(skia_surface.canvas(), Some(gr_context), 0);
+        let drawn = frame_start.elapsed();
 
         self.backend.release_swapchain_surface(gr_context, &mut skia_surface);
 
         self.flush_and_submit(gr_context);
+        let submitted = frame_start.elapsed();
 
         // Skia drew via the raw queue behind wgpu's back, and `Queue::present` skips its own
         // transition when the tracker already says PRESENT, so nothing would order the
@@ -443,6 +455,31 @@ impl crate::Surface for WGPUSurface {
         }
 
         self.wgpu.queue.present(frame);
+
+        {
+            use std::sync::atomic::{AtomicU64, Ordering};
+            static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+            // The app's own switch; see `concat_log::profile`. Off, this
+            // costs one relaxed load a frame.
+            let on = *ON.get_or_init(|| std::env::var_os("CONCAT_PROFILE").is_some());
+            if on {
+                static FRAMES: AtomicU64 = AtomicU64::new(0);
+                let n = FRAMES.fetch_add(1, Ordering::Relaxed);
+                if n % 20 == 0 {
+                    let present = frame_start.elapsed();
+                    let ms = |d: std::time::Duration| d.as_secs_f64() * 1000.0;
+                    eprintln!(
+                        "wgpupaint: acquire {:.2} · clear {:.2} · draw {:.2} · submit {:.2} · present {:.2} · total {:.2} ms",
+                        ms(acquired),
+                        ms(cleared - acquired),
+                        ms(drawn - cleared),
+                        ms(submitted - drawn),
+                        ms(present - submitted),
+                        ms(present),
+                    );
+                }
+            }
+        }
 
         Ok(DrawOutcome::Success)
     }
