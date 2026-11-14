@@ -1218,6 +1218,9 @@ fn start(project: Option<std::path::PathBuf>, smoke: bool) -> Result<(), slint::
     editor.on_scrubbed_drag(on_lanes!(|state, seconds: f32| {
         state.scrub_snapped(seconds);
     }));
+    editor.on_edge_step(on_lanes!(|state, speed: f32, direction: i32| {
+        state.edge_step(speed, direction);
+    }));
     editor.on_finger_held(on_lanes!(|state| {
         state.finger_held();
     }));
@@ -2569,6 +2572,7 @@ fn start(project: Option<std::path::PathBuf>, smoke: bool) -> Result<(), slint::
                         "sort-kind" => state.handle(Msg::Media(MediaMsg::SortChanged(2))),
                         "zoom-in" => state.handle(Msg::Timeline(TimelineMsg::ZoomIn)),
                         "zoom-out" => state.handle(Msg::Timeline(TimelineMsg::ZoomOut)),
+                        "reset-layout" => state.reset_layout(),
                         "start" => {
                             state.pause();
                             state.seek(0.0);

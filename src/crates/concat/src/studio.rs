@@ -1229,6 +1229,8 @@ pub struct Studio {
     /// centre's offset from the clip's centre - see `TitleClip::offset`.
     #[allow(clippy::type_complexity)]
     pub title_blocks: HashMap<String, ((u32, u32), (i32, i32))>,
+    /// The instant the edge scroll last carried the view; see `edge_step`.
+    pub edge_clock: Option<std::time::Instant>,
     pub drop: Option<DropPlan>,
     /// The instant the gesture in flight has snapped onto, for the hairline
     /// the lanes draw: a trim's edge pulled to a neighbour's, a clip's head or
@@ -3164,6 +3166,7 @@ impl Studio {
             last_commit: None,
             title_blocks: HashMap::new(),
             drop: None,
+            edge_clock: None,
             snap_mark: None,
             project_sheet: crate::panes::project::ProjectPane::default(),
             captions: crate::panes::captions::CaptionsPane::default(),

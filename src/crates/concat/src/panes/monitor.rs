@@ -109,6 +109,15 @@ const SCRUB_GAP: std::time::Duration = std::time::Duration::from_millis(250);
 /// the true frame is there by the time anyone looks.
 const SCRUB_REST: std::time::Duration = std::time::Duration::from_millis(120);
 
+/// How often a scrub's picture goes on the monitor at most.
+///
+/// Every frame is a new texture and a new image, and the window pays to import
+/// it on every paint - so a scrub used to run at the speed the preview could
+/// be redrawn, and the playhead trailed the pointer by a frame of it. Ten
+/// pictures a second is enough to read a cut by; the playhead, which moves on
+/// every report, is what the hand follows.
+const SCRUB_SHOW: std::time::Duration = std::time::Duration::from_millis(100);
+
 /// The monitor's state.
 #[derive(Default)]
 pub struct MonitorPane {
@@ -138,6 +147,8 @@ pub struct MonitorPane {
     refining: bool,
     /// Asks for the exact frame once a scrub has rested; see [`SCRUB_REST`].
     rest: slint::Timer,
+    /// When a scrub's picture last went up; see [`SCRUB_SHOW`].
+    last_shown: Option<std::time::Instant>,
 }
 
 /// How smoothly a playback's frames reached the monitor: one line in the
@@ -217,7 +228,19 @@ impl MonitorPane {
                 } else if !spec.moving {
                     self.cadence.report(fps);
                 }
-                self.show(result, spec, studio);
+                // A scrub shows at most one picture in SCRUB_SHOW; the rest
+                // are dropped, and the playhead keeps the pointer's pace while
+                // the picture steps. Dropped ones still mark the picture on
+                // screen as a nearest one, so the rest still refines it.
+                if spec.nearest && self.last_shown.is_some_and(|at| at.elapsed() < SCRUB_SHOW)
+                {
+                    if !result.as_ref().is_err() {
+                        self.inexact = true;
+                    }
+                } else {
+                    self.show(result, spec, studio);
+                    self.last_shown = Some(std::time::Instant::now());
+                }
                 if self.wanted {
                     self.request(studio, Lane::Main);
                 } else if self.inexact {

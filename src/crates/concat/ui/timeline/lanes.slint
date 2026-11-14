@@ -1275,6 +1275,18 @@ export component Lanes inherits Rectangle {
     in property <[ClipData]> clips;
     in property <TimelineTool> tool: TimelineTool.select;
     in property <float> playhead;
+    /// Where the line is *drawn*: the pointer's own instant while a scrub is
+    /// in flight, and the published playhead otherwise.
+    ///
+    /// The line is what the hand follows, so it must not wait on the round
+    /// trip a seek makes - through Rust, the project, and the publish back.
+    /// Slint has the pointer and the scroll already, so the line can sit
+    /// exactly under the cursor on the frame the pointer moved, while the
+    /// engine catches up behind it and the monitor redraws at its own pace.
+    /// By the time the drag ends the two are the same place.
+    property <float> playhead-shown: root.scrubbing
+        ? Math.max(0, root.seconds-at(root.pointer-x))
+        : root.playhead;
     /// The instant the trim in flight snapped onto, in seconds, or -1 for
     /// none. Drawn as the hairline below; see `Studio::snap_mark`.
     in property <float> snap-line: -1;
@@ -1319,6 +1331,8 @@ export component Lanes inherits Rectangle {
     /// A click still seeks exactly where it landed, so a press meant to land
     /// on one frame is never moved off it.
     callback scrubbed-drag(seconds: float);
+    /// One tick of the edge scroll: `speed` pixels a second, and which way.
+    callback edge-step(speed: float, direction: int);
     /// A ruler diamond dragged from one instant to another.
     callback key-mark-moved(from: float, to: float);
     /// A ruler diamond was clicked: the Keyframes pane, if it is not up.
@@ -1527,13 +1541,6 @@ export component Lanes inherits Rectangle {
             : root.pointer-x - (root.width - root.edge-zone)) / 1px;
         Math.min(1, Math.max(0, over / (root.edge-zone / 1px * 2)));
     }
-    /// Where the edge scroll stops, which is where everything else stops:
-    /// Rust's `max-scroll`, not a second rule of this panel's own. It used to
-    /// be a quarter of a view past the cut, which is zoom-dependent - two and
-    /// a half seconds of room at one zoom, none at another, and nothing at
-    /// all once the view grew past the cut, where the subtraction went
-    /// negative and holding at the edge stopped the drag dead.
-    property <float> last-left: Math.max(root.scroll-left, root.max-scroll);
     property <bool> edge-left: root.pointer-x < root.edge-zone && root.scroll-left > 0;
     property <bool> edge-right: root.pointer-x > root.width - root.edge-zone
         && root.scroll-left < root.max-scroll;
@@ -1558,24 +1565,12 @@ export component Lanes inherits Rectangle {
         interval: 16ms;
         running: root.at-edge;
         triggered => {
-            // Sixteen milliseconds of that speed, in pixels - a fractional
-            // count, not a whole one - and never more than two per cent of
-            // what the pane is showing.
-            //
-            // The cap is not decoration. What a tick carries measured eight
-            // and a half seconds against a ceiling of nought point seven, a
-            // factor of eleven, which is exactly what `edge-depth` produces
-            // if its clamp does not hold and the pointer sits a couple of
-            // hundred pixels outside the lanes - which is where it sits when
-            // a drag to the left runs over the track headers. Bounded here in
-            // seconds rather than trusted there in arithmetic, the view can
-            // sweep at most a fiftieth of itself a tick whatever the ramp
-            // returns.
-            let view_seconds = (root.width / 1px) * root.seconds-per-pixel;
-            let carry = Math.min(root.edge-speed() * 0.016 * root.seconds-per-pixel,
-                view_seconds * 0.02);
-            root.scrolled(Math.min(root.last-left, Math.max(0, root.scroll-left
-                + (root.edge-left ? -1 : 1) * carry)));
+            // The speed is this panel's - how deep the pointer is in the zone
+            // - and the time is Rust's, because a timer's interval is what it
+            // asked for and not what it got. Worked out for sixteen
+            // milliseconds and delivered every forty-five, the view used to
+            // creep at a third of its speed, in jumps three times the width.
+            root.edge-step(root.edge-speed(), root.edge-left ? -1 : 1);
             if (root.scrubbing) {
                 root.scrubbed-drag(Math.max(0, root.seconds-at(root.pointer-x)));
             } else if (root.clip-dragging) {
@@ -2245,7 +2240,7 @@ export component Lanes inherits Rectangle {
         // Over everything, ruler included: it is the one thing that must never
         // be behind a clip.
         Rectangle {
-            x: root.at(root.playhead);
+            x: root.at(root.playhead-shown);
             y: 0;
             width: 1px;
             height: root.height;

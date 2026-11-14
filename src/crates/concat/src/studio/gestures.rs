@@ -7,6 +7,38 @@ use super::*;
 impl Studio {
     // ── gestures ──
 
+    /// One tick of the edge scroll: `speed` pixels a second, in `direction`,
+    /// for as long as it has actually been since the last tick.
+    ///
+    /// The timer's interval is not the truth. A tick is due every sixteen
+    /// milliseconds, but the window lays out and repaints the whole frame
+    /// between two of them - nearer forty-five on this machine - so a carry
+    /// worked out for sixteen arrived at a third of the speed it was tuned
+    /// for, in jumps three times the width. Measured here, against a clock
+    /// that does not care what the window is doing, the view moves at the
+    /// speed it says it does.
+    pub fn edge_step(&mut self, speed: f32, direction: i32) {
+        let now = std::time::Instant::now();
+        let dt = self
+            .edge_clock
+            .replace(now)
+            .map_or(0.016, |last| now.duration_since(last).as_secs_f32());
+        // A tick that arrives after a pause - the first of a gesture, a stall -
+        // is worth a frame, not the pause: a carry that size would fling the
+        // view across the cut.
+        let dt = if dt > 0.1 { 0.016 } else { dt.max(0.001) };
+        // Never more than a fiftieth of what the pane shows a frame's worth:
+        // the ramp is a feel, not a licence to sweep the cut.
+        let view = self.lanes.width * self.lanes.seconds_per_pixel;
+        let carry = (speed * dt * self.lanes.seconds_per_pixel).min(view * 1.25 * dt);
+        let target = self.lanes.scroll_left + direction as f32 * carry;
+        self.lanes.scroll_left = if self.lanes.centred {
+            target
+        } else {
+            target.max(0.0)
+        };
+    }
+
     /// A press resolves the selection before anything moves, so a drag that
     /// starts on an already-selected clip carries the whole set.
     pub fn clip_pressed(&mut self, id: &str, additive: bool, edge: i32) {

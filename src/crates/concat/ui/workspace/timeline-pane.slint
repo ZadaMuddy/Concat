@@ -107,6 +107,7 @@ export component TimelinePane inherits Rectangle {
 
     callback scrubbed(seconds: float);
     callback scrubbed-drag(seconds: float);
+    callback edge-step(speed: float, direction: int);
     callback key-mark-moved(from: float, to: float);
     callback key-mark-opened();
     /// A press on an empty stretch of lane; see Editor.blur.
@@ -462,6 +463,7 @@ export component TimelinePane inherits Rectangle {
 
                 scrubbed(seconds) => { root.scrubbed(seconds); }
                 scrubbed-drag(seconds) => { root.scrubbed-drag(seconds); }
+                edge-step(speed, direction) => { root.edge-step(speed, direction); }
                 key-mark-moved(from, to) => { root.key-mark-moved(from, to); }
                 key-mark-opened => { root.key-mark-opened(); }
                 hovered(seconds) => { root.hovered(seconds); }

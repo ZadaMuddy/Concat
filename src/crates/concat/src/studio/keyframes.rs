@@ -2756,6 +2756,17 @@ impl Studio {
                     &keymap::label(&self.prefs, "next-edit"),
                     true,
                 ),
+                rule(),
+                // The panels, back where they ship. A gutter drag is easy to
+                // lose the arrangement to, and until now the only way back was
+                // to edit the settings file by hand.
+                row(
+                    "reset-layout",
+                    t("studio.resetLayout"),
+                    Glyph::None,
+                    "",
+                    true,
+                ),
             ],
             _ => Vec::new(),
         }

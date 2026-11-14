@@ -99,6 +99,31 @@ impl Studio {
         );
     }
 
+    /// Puts the panels back where they ship, and forgets the arrangement saved
+    /// in their place.
+    ///
+    /// The saved layout is what the person is looking at when they ask for
+    /// this, so it is the saved one that has to go: clearing the docks alone
+    /// would put them back for this run and hand the old arrangement back on
+    /// the next launch.
+    ///
+    /// `dock` is whichever the window is showing now and `dock_aside` the
+    /// other, as `save_layout` says - so the pair is set by which is which,
+    /// not by their names.
+    pub fn reset_layout(&mut self) {
+        let (wide, compact) = (crate::dock::default_dock(), crate::dock::compact_dock());
+        if self.compact {
+            self.dock = compact;
+            self.dock_aside = wide;
+        } else {
+            self.dock = wide;
+            self.dock_aside = compact;
+        }
+        self.prefs.layout = None;
+        self.prefs.save(&self.host.dirs);
+        self.notify(&t("studio.layoutReset"), false);
+    }
+
     /// Writes the docks and the window's size into the settings, when they
     /// changed and Settings > General says to remember them. A phone's
     /// shell has no dock to keep.
