@@ -215,6 +215,24 @@ impl Studio {
             .set_preview_frame(self.monitor.image.clone());
     }
 
+    /// What a scrub changes, and nothing else.
+    ///
+    /// A scrub moves the playhead and can scroll the view; it changes no
+    /// clip, no track and no selection. The full publish hands Slint a fresh
+    /// `clips` vector every time, and a fresh vector is every clip element
+    /// dropped and built again on the next frame - hundreds of them, each
+    /// with its filmstrip and its wave. That rebuild is the frame the hand
+    /// is waiting on: it is why the line can only move a handful of times a
+    /// second while the pointer is moving, and why the work shows up in the
+    /// paint rather than in the handler. So a scrub publishes its three
+    /// values and leaves the models alone.
+    pub fn publish_scrub(&self, app: &App, _models: &Models) {
+        let editor = app.global::<Editor>();
+        editor.set_playhead(self.playhead);
+        editor.set_scroll_left(self.lanes.scroll_left);
+        editor.set_snap_line(self.snap_mark.unwrap_or(-1.0));
+    }
+
     /// The timeline and the readouts that follow it: what runs on every
     /// event of a scrub, a drag, a trim or a knob.
     pub fn publish_lanes(&self, app: &App, models: &Models) {

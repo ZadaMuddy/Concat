@@ -191,6 +191,16 @@ component Clip inherits Rectangle {
     callback hovered(x: length);
     callback hover-ended();
 
+    /// A scrub is in flight, so the body is drawn plain.
+    ///
+    /// The filmstrip and the wave are by far the clip's heaviest paint: a
+    /// strip is a handful of clipped images and a wave a path of hundreds of
+    /// segments, and both are drawn again for every visible clip on every
+    /// frame the window paints. While the playhead is being dragged, the
+    /// frame is what the hand is waiting on - the line can only move when a
+    /// frame goes up - so the body is left flat until the drag is over.
+    in property <bool> plain: false;
+
     property <color> mark: Paint.mark(root.item.kind);
     property <color> well: Paint.well(root.item.kind);
     property <Glyph> badge: Paint.badge(root.item.kind);
@@ -307,7 +317,7 @@ component Clip inherits Rectangle {
         // stretch that is too loud is seen without being heard. The path
         // is at unity and the clip's volume scales its height here, so a
         // volume drag moves the picture without a new path from Rust.
-        if root.item.wave != "" && !root.banded: Wave {
+        if root.item.wave != "" && !root.banded && !root.plain: Wave {
             x: root.item.wave-from * parent.width;
             y: 0;
             width: root.item.wave-span * parent.width;
@@ -318,7 +328,7 @@ component Clip inherits Rectangle {
         }
 
         // The floor the bars stand on.
-        if root.item.wave != "" && !root.banded: Rectangle {
+        if root.item.wave != "" && !root.banded && !root.plain: Rectangle {
             x: 0;
             y: parent.height - 1px;
             width: parent.width;
@@ -345,7 +355,7 @@ component Clip inherits Rectangle {
         // Drawn at any width. A clip narrower than a tile shows the left
         // of one frame, cut where the clip ends - a sliver of the picture
         // is still the picture, and the well it would leave showing is not.
-        if root.item.strip.frames > 0 && root.width > 0px: Rectangle {
+        if root.item.strip.frames > 0 && root.width > 0px && !root.plain: Rectangle {
             x: 0;
             y: 0;
             width: parent.width;
@@ -1817,6 +1827,7 @@ export component Lanes inherits Rectangle {
                 && self.y + self.height > root.ruler-height && self.y < root.height;
 
             item: entry;
+            plain: root.scrubbing;
             px-per-second: root.px-per-second;
             viewport-width: parent.width;
             tool: root.tool;

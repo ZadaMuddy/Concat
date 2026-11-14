@@ -1212,10 +1212,10 @@ fn start(project: Option<std::path::PathBuf>, smoke: bool) -> Result<(), slint::
     editor.on_key_mark_moved(on_lanes!(|state, from: f32, to: f32| {
         state.move_keys_at(from, to);
     }));
-    editor.on_scrubbed(on_lanes!(|state, seconds: f32| {
+    editor.on_scrubbed(handler!(publish_scrub, |state, seconds: f32| {
         state.scrub(seconds);
     }));
-    editor.on_scrubbed_drag(on_lanes!(|state, seconds: f32| {
+    editor.on_scrubbed_drag(handler!(publish_scrub, |state, seconds: f32| {
         state.scrub_snapped(seconds);
     }));
     editor.on_edge_step(on_lanes!(|state, speed: f32, direction: i32| {
