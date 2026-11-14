@@ -293,7 +293,13 @@ impl Studio {
                             studio.request_preview();
                         }
                     }
-                    // The full publish, though playback changes no model:
+                    // The full publish, though playback changes no model.
+                    // Publishing only the playhead and the scroll instead was
+                    // measured against it A/B/A on one build, at full quality:
+                    // 44 fps / 19.7 ms, 45 / 21.5, 45 / 21.9. The drift between
+                    // the two identical runs is bigger than the difference, so
+                    // the clip models cost the frame nothing and the paint's
+                    // `before` phase is not our publishing. Earlier:
                     // measured with `loop.tick_gap`, publishing only the
                     // playhead and the scroll instead made no difference to
                     // the frame (11.6 ms against 12.0 at 700x500, quarter
