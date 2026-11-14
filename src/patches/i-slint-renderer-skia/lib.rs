@@ -38,6 +38,7 @@ type PhysicalBorderRadius = BorderRadius<f32, PhysicalPx>;
 mod cached_image;
 mod font_cache;
 mod itemrenderer;
+mod paint_profile;
 
 #[cfg(skia_backend_software)]
 pub mod software_surface;

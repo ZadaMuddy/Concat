@@ -530,6 +530,7 @@ impl ItemRenderer for SkiaItemRenderer<'_> {
         size: LogicalSize,
         _cache: &CachedRenderingData,
     ) {
+        let _paint = super::paint_profile::Scope::new(super::paint_profile::RECT);
         let geometry = PhysicalRect::from(size * self.scale_factor);
         if geometry.is_empty() {
             return;
@@ -554,6 +555,7 @@ impl ItemRenderer for SkiaItemRenderer<'_> {
         size: LogicalSize,
         _: &CachedRenderingData,
     ) {
+        let _paint = super::paint_profile::Scope::new(super::paint_profile::BORDER);
         let Some(layout) = BorderRectLayout::new(rect, size, self.scale_factor) else {
             return;
         };
@@ -592,6 +594,7 @@ impl ItemRenderer for SkiaItemRenderer<'_> {
         _size: LogicalSize,
         _cache: &CachedRenderingData,
     ) {
+        let _paint = super::paint_profile::Scope::new(super::paint_profile::WINDOW_BACKGROUND);
         // Register a dependency for the partial renderer's dirty tracker. The actual rendering
         // is done earlier in SkiaRenderer, which clears (solid color) or draws (gradient) the
         // background before the item tree is rendered.
@@ -605,6 +608,7 @@ impl ItemRenderer for SkiaItemRenderer<'_> {
         size: LogicalSize,
         _cache: &CachedRenderingData,
     ) {
+        let _paint = super::paint_profile::Scope::new(super::paint_profile::IMAGE);
         let geometry = PhysicalRect::from(size * self.scale_factor);
         if geometry.is_empty() {
             return;
@@ -619,6 +623,7 @@ impl ItemRenderer for SkiaItemRenderer<'_> {
         size: LogicalSize,
         _cache: &CachedRenderingData,
     ) {
+        let _paint = super::paint_profile::Scope::new(super::paint_profile::TEXT);
         let restore = self.save_canvas_and_pixel_align_origin();
         sharedparley::draw_text(self, text, Some(self_rc), size, Some(self.text_layout_cache));
         if restore {
@@ -632,6 +637,7 @@ impl ItemRenderer for SkiaItemRenderer<'_> {
         self_rc: &i_slint_core::items::ItemRc,
         size: LogicalSize,
     ) {
+        let _paint = super::paint_profile::Scope::new(super::paint_profile::TEXT_INPUT);
         let restore = self.save_canvas_and_pixel_align_origin();
         sharedparley::draw_text_input(self, text_input, self_rc, size, self.text_layout_cache);
         if restore {
@@ -645,6 +651,7 @@ impl ItemRenderer for SkiaItemRenderer<'_> {
         item_rc: &i_slint_core::items::ItemRc,
         size: LogicalSize,
     ) {
+        let _paint = super::paint_profile::Scope::new(super::paint_profile::PATH);
         let geometry = PhysicalRect::from(size * self.scale_factor);
 
         let (physical_offset, skpath): (crate::euclid::Vector2D<f32, PhysicalPx>, _) =
@@ -762,6 +769,7 @@ impl ItemRenderer for SkiaItemRenderer<'_> {
         self_rc: &i_slint_core::items::ItemRc,
         _size: LogicalSize,
     ) {
+        let _paint = super::paint_profile::Scope::new(super::paint_profile::SHADOW);
         let offset = LogicalPoint::from_lengths(box_shadow.offset_x(), box_shadow.offset_y())
             * self.scale_factor;
         let inset = box_shadow.inset();
@@ -869,6 +877,7 @@ impl ItemRenderer for SkiaItemRenderer<'_> {
         item_rc: &i_slint_core::items::ItemRc,
         update_fn: &dyn Fn(&mut dyn FnMut(u32, u32, &[u8])),
     ) {
+        let _paint = super::paint_profile::Scope::new(super::paint_profile::PIXMAP);
         let skia_image = self.image_cache.get_or_update_cache_entry(item_rc, || {
             let mut cached_image = None;
             update_fn(&mut |width: u32, height: u32, data: &[u8]| {
@@ -894,6 +903,7 @@ impl ItemRenderer for SkiaItemRenderer<'_> {
     }
 
     fn draw_string(&mut self, string: &str, color: i_slint_core::Color) {
+        let _paint = super::paint_profile::Scope::new(super::paint_profile::STRING);
         sharedparley::draw_text(
             self,
             std::pin::pin!((SharedString::from(string), Brush::from(color))),
@@ -1096,6 +1106,7 @@ impl GlyphRenderer for SkiaItemRenderer<'_> {
         y_offset: sharedparley::PhysicalLength,
         glyphs_it: &mut dyn Iterator<Item = sharedparley::parley::layout::Glyph>,
     ) {
+        let _paint = super::paint_profile::Scope::new(super::paint_profile::GLYPH);
         let Some(type_face) = crate::font_cache::FONT_CACHE
             .with_borrow_mut(|font_cache| font_cache.font_with_variations(font, synthesis))
         else {

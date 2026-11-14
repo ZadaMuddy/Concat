@@ -423,8 +423,10 @@ impl crate::Surface for WGPUSurface {
         let mut skia_surface = skia_surface
             .ok_or_else(|| PlatformError::from("Failed to create Skia surface from WGPU"))?;
 
+        crate::paint_profile::frame_start();
         callback(skia_surface.canvas(), Some(gr_context), 0);
         let drawn = frame_start.elapsed();
+        crate::paint_profile::dump(drawn - cleared);
 
         self.backend.release_swapchain_surface(gr_context, &mut skia_surface);
 
