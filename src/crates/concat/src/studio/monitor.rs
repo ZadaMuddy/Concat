@@ -339,6 +339,14 @@ impl Studio {
     /// A scrub: the playhead goes to `seconds`, and while a finger is on
     /// the phone's lanes, where it went is a sample of how fast they move.
     pub fn scrub(&mut self, seconds: f32) {
+        // Taking the playhead by hand stops the transport. Left rolling, it
+        // keeps advancing the line a frame after the hand puts it down, so
+        // the two fight over it for the whole drag: the line runs ahead
+        // between reports and is dragged back when one lands. A scrub is a
+        // question about this instant, and it is answered from a standstill.
+        if self.playing {
+            self.pause();
+        }
         self.seek(seconds.max(0.0));
         if self.coast.tracking {
             let at = self.coast.clock();
