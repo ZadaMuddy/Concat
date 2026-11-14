@@ -293,6 +293,12 @@ impl Studio {
                             studio.request_preview();
                         }
                     }
+                    // The full publish, though playback changes no model:
+                    // measured with `loop.tick_gap`, publishing only the
+                    // playhead and the scroll instead made no difference to
+                    // the frame (11.6 ms against 12.0 at 700x500, quarter
+                    // preview). The frame's cost is the window's paint, not
+                    // the model sync, so this stays as it was.
                     shell.studio.borrow().publish_lanes(&app, &shell.models);
                 });
             },

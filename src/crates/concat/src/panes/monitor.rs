@@ -312,11 +312,20 @@ impl MonitorPane {
 
     /// The quality tier for the project's active timeline: 0 full, 1
     /// half, 2 quarter. Half until chosen.
+    ///
+    /// `CONCAT_PREVIEW_QUALITY=0|1|2` sets what an unchosen timeline starts
+    /// at: a profiling run can ask for the picture at a quarter of the size
+    /// to see what drawing it costs, without reaching for the mouse.
     pub fn quality_of(&self, project: &Project) -> usize {
         self.quality
             .get(&project.active_timeline_id)
             .copied()
-            .unwrap_or(1)
+            .unwrap_or_else(|| {
+                std::env::var("CONCAT_PREVIEW_QUALITY")
+                    .ok()
+                    .and_then(|value| value.trim().parse::<usize>().ok())
+                    .map_or(1, |tier| tier.min(2))
+            })
     }
 
     /// The frame's size at a quality tier: the output scaled, rounded to

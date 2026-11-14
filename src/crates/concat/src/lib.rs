@@ -2894,6 +2894,21 @@ fn start(project: Option<std::path::PathBuf>, smoke: bool) -> Result<(), slint::
         Shell::with(|_, app| platform::apply_ui_scale(app.window()));
     });
 
+    // `CONCAT_AUTOPLAY` presses play a few seconds in, so a profiling run
+    // needs nobody at the keyboard - and so a measurement is not a moving
+    // of the mouse that changes what is being measured.
+    if std::env::var_os("CONCAT_AUTOPLAY").is_some() {
+        std::thread::Builder::new()
+            .name("concat-autoplay".to_owned())
+            .spawn(|| {
+                std::thread::sleep(std::time::Duration::from_secs(4));
+                let _ = slint::invoke_from_event_loop(|| {
+                    Shell::with(|shell, _| shell.studio.borrow_mut().play_toggle());
+                });
+            })
+            .ok();
+    }
+
     let result = app.run();
     drop(reader_sweep);
     if result.is_ok() {
