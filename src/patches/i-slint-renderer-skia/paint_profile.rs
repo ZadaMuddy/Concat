@@ -35,8 +35,15 @@ pub const WINDOW_BACKGROUND: usize = 10;
 pub const GAP: usize = 11;
 /// The renderer working out what changed, before anything is drawn.
 pub const DAMAGE: usize = 12;
+/// The four phases a frame is made of, measured once each: everything before
+/// the item renderer starts, everything in it up to the walk, the walk, and
+/// the tail after it.
+pub const BEFORE: usize = 13;
+pub const PREWALK: usize = 14;
+pub const WALK: usize = 15;
+pub const TAIL: usize = 16;
 
-pub const KINDS: usize = 13;
+pub const KINDS: usize = 17;
 pub const NAMES: [&str; KINDS] = [
     "image",
     "rect",
@@ -51,11 +58,19 @@ pub const NAMES: [&str; KINDS] = [
     "background",
     "gap",
     "damage",
+    "before",
+    "prewalk",
+    "walk",
+    "tail",
 ];
 
 const ZERO: AtomicU64 = AtomicU64::new(0);
 static NANOS: [AtomicU64; KINDS] = [ZERO; KINDS];
 static CALLS: [AtomicU64; KINDS] = [ZERO; KINDS];
+/// The gap before each kind of draw call, so the walk can be blamed on the
+/// items it leads into rather than on the walk as a whole.
+static GAP_NANOS: [AtomicU64; KINDS] = [ZERO; KINDS];
+static GAP_CALLS: [AtomicU64; KINDS] = [ZERO; KINDS];
 
 fn on() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
@@ -81,6 +96,8 @@ impl Scope {
                 let gap = now.duration_since(previous).as_nanos() as u64;
                 NANOS[GAP].fetch_add(gap, Ordering::Relaxed);
                 CALLS[GAP].fetch_add(1, Ordering::Relaxed);
+                GAP_NANOS[kind].fetch_add(gap, Ordering::Relaxed);
+                GAP_CALLS[kind].fetch_add(1, Ordering::Relaxed);
             }
         });
         Scope { kind, at: Some(now) }
@@ -103,6 +120,29 @@ thread_local! {
     /// how long the walk to it took. Cleared at the start of every frame, so
     /// the first call's gap is the frame's own setup.
     static LAST: std::cell::Cell<Option<Instant>> = const { std::cell::Cell::new(None) };
+    /// Where the last phase mark was, for [`mark`].
+    static PHASE: std::cell::Cell<Option<Instant>> = const { std::cell::Cell::new(None) };
+}
+
+/// Starts the phase clock at the very beginning of a frame.
+pub fn restart() {
+    if on() {
+        PHASE.with(|phase| phase.set(Some(Instant::now())));
+    }
+}
+
+/// Records a phase under `kind`: the time since the last mark, or the frame's
+/// start for the first one.
+pub fn mark(kind: usize) {
+    if !on() {
+        return;
+    }
+    let now = Instant::now();
+    PHASE.with(|phase| {
+        if let Some(previous) = phase.replace(Some(now)) {
+            record(kind, now.duration_since(previous));
+        }
+    });
 }
 
 /// Starts a frame: the first draw call's gap is then the frame's setup.
@@ -149,6 +189,25 @@ pub fn dump(frame_draw: Duration) {
         if detail.is_empty() { "nothing over 0.05 ms" } else { &detail },
         frame_draw.as_secs_f64() * 1000.0,
     );
+    let mut leads = String::new();
+    for kind in 0..KINDS {
+        let calls = GAP_CALLS[kind].swap(0, Ordering::Relaxed);
+        let nanos = GAP_NANOS[kind].swap(0, Ordering::Relaxed);
+        if calls == 0 {
+            continue;
+        }
+        let ms = nanos as f64 / 1_000_000.0;
+        if ms < 0.05 {
+            continue;
+        }
+        if !leads.is_empty() {
+            leads.push_str(" · ");
+        }
+        leads.push_str(&format!("{} {:.2} ms/{calls}", NAMES[kind], ms));
+    }
+    if !leads.is_empty() {
+        eprintln!("gaps:  {leads}");
+    }
 }
 
 /// For a caller that wants a one-off read without a frame boundary.

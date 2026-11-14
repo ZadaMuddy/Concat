@@ -755,6 +755,7 @@ impl SkiaRenderer {
         window: &i_slint_core::api::Window,
         post_render_cb: Option<&dyn Fn(&mut dyn ItemRenderer)>,
     ) -> Option<DirtyRegion> {
+        crate::paint_profile::restart();
         skia_canvas.rotate(rotation_angle_degrees, None);
         skia_canvas.translate(translation);
 
@@ -796,6 +797,7 @@ impl SkiaRenderer {
         components: &[(ItemTreeWeak, LogicalPoint)],
         post_render: &dyn Fn(&mut dyn ItemRenderer),
     ) -> Option<DirtyRegion> {
+        crate::paint_profile::mark(crate::paint_profile::BEFORE);
         let window_inner = WindowInner::from_pub(window);
         let window_adapter = window_inner.window_adapter();
 
@@ -926,6 +928,7 @@ impl SkiaRenderer {
                 }
             }
 
+            crate::paint_profile::mark(crate::paint_profile::PREWALK);
             for (component, origin) in components {
                 if let Some(component) = ItemTreeWeak::upgrade(component) {
                     i_slint_core::item_rendering::render_component_items(
@@ -937,6 +940,7 @@ impl SkiaRenderer {
                 }
             }
 
+            crate::paint_profile::mark(crate::paint_profile::WALK);
             post_render(item_renderer);
 
             if let Some(path) = dirty_region_to_visualize {
@@ -967,6 +971,7 @@ impl SkiaRenderer {
             ctx.flush(None);
         }
 
+        crate::paint_profile::mark(crate::paint_profile::TAIL);
         dirty_region
     }
 
