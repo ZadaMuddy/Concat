@@ -567,6 +567,8 @@
   "settings.restartMessage": "Drawing on the GPU or in software takes effect when Concat starts. Your project is saved and opens again after the restart.",
   "settings.restartNow": "Restart now",
   "settings.restartTitle": "Restart Concat?",
+  "settings.simpleScrub": "Simpler clips while scrubbing",
+  "settings.simpleScrubHint": "On, the filmstrip and the waveform are left undrawn while you drag the playhead, which leaves more of each frame for the line and keeps it closer to the pointer. The clips look flat until you let go.",
   "settings.rose": "Rose",
   "settings.runsLocally": "Runs locally",
   "settings.scale": "Scale",

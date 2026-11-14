@@ -57,6 +57,9 @@ pub enum SettingsMsg {
     PlayheadStopsChanged(bool),
     /// The proxies switch: whether large files get a smaller copy to play.
     ProxiesChanged(bool),
+    /// The simple-scrub switch: whether clips are left plain - no filmstrip,
+    /// no wave - while the playhead is dragged.
+    SimpleScrubChanged(bool),
     /// The remember-layout switch: whether a launch opens on the last
     /// session's panels and window size.
     RememberLayoutChanged(bool),
@@ -388,6 +391,13 @@ impl SettingsPane {
                 // On, the media already in the project gets its proxies
                 // straight away (refresh_art's stamp holds the switch);
                 // off, playback reads the files from the next frame.
+            }
+            SettingsMsg::SimpleScrubChanged(on) => {
+                log::info!("settings: Simple scrub {}", on_off(on));
+                studio.prefs.simple_scrub = Some(on);
+                studio.prefs.save(&studio.host.dirs);
+                // The lanes read the switch from the interface, so the
+                // publish after this message is what makes it take effect.
             }
             SettingsMsg::RememberLayoutChanged(on) => {
                 log::info!("settings: Remember layout {}", on_off(on));
@@ -1009,6 +1019,7 @@ impl SettingsPane {
                 .unwrap_or(2) as i32,
             playhead_stops: self.playhead_stops,
             proxies: studio.prefs.proxies,
+            simple_scrub: studio.prefs.simplifies_scrub(),
             remember_layout: studio.prefs.remembers_layout(),
             layout_switchable: !crate::platform::phone(),
             gpu: !studio.prefs.draws_in_software(),

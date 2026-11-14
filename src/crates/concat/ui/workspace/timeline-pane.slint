@@ -44,6 +44,9 @@ export component TimelinePane inherits Rectangle {
     in property <bool> linkage: true;
     in property <bool> pan-mode: false;
     in property <bool> trim-follow: false;
+    /// Settings > General: clips are left plain while the playhead is
+    /// dragged. Passed to the lanes, which decide what `plain` means.
+    in property <bool> simple-scrub: false;
     in property <bool> preview-axis: false;
     in property <bool> preview-axis-audio;
     in property <int> selected-count;
@@ -449,6 +452,7 @@ export component TimelinePane inherits Rectangle {
                 duration-seconds: root.duration-seconds;
                 key-marks: root.key-marks;
                 tool: root.tool;
+                simple-scrub: root.simple-scrub;
                 playhead: root.playhead;
                 snap-line: root.snap-line;
                 frame-rate: root.frame-rate;

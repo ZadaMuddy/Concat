@@ -77,6 +77,8 @@ export struct SettingsData {
     playhead-stops: bool,
     /// large files get a smaller copy for playback
     proxies: bool,
+    /// clips are left plain while the playhead is dragged
+    simple-scrub: bool,
     /// a launch opens with the panels and the window where the last
     /// session left them
     remember-layout: bool,
@@ -675,6 +677,7 @@ export component SettingsDialog inherits Sheet {
     callback scale-changed(index: int);
     callback playhead-stops-changed(on: bool);
     callback proxies-changed(on: bool);
+    callback simple-scrub-changed(on: bool);
     callback remember-layout-changed(on: bool);
     callback gpu-changed(on: bool);
     callback magnetic-changed(on: bool);
@@ -1026,6 +1029,21 @@ export component SettingsDialog inherits Sheet {
                     on: root.data.proxies;
                     open: false;
                     switched(on) => { root.proxies-changed(on); }
+                }
+
+                // Off, clips keep their filmstrip and their wave while the
+                // playhead is dragged. On, both are left undrawn for the
+                // length of the drag: the frame is cheaper, so the line keeps
+                // closer to the pointer, at the cost of the clips going flat
+                // under the hand. See `Preferences::simple_scrub`.
+                DialogSection {
+                    ruled: false;
+                    title: I18n.t("settings.simpleScrub");
+                    hint: I18n.t("settings.simpleScrubHint");
+                    switchable: true;
+                    on: root.data.simple-scrub;
+                    open: false;
+                    switched(on) => { root.simple-scrub-changed(on); }
                 }
 
                 // On, the next launch opens with the panels where this one

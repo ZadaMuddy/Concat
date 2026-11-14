@@ -363,6 +363,10 @@ export global Editor {
     /// sound under the pointer plays too.
     in-out property <bool> preview-axis: false;
     in-out property <bool> preview-axis-audio;
+    /// Whether clips are left plain - no filmstrip, no wave - while the
+    /// playhead is dragged; Settings > General, and read by the lanes to
+    /// decide what a scrub costs the frame. See `Preferences::simple_scrub`.
+    in-out property <bool> simple-scrub: false;
     in-out property <int> selected-count;
     /// Whether the history has a step that way: what greys the tray's undo
     /// and redo buttons. The Edit menu asks Rust the same question when it

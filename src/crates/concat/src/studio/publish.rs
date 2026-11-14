@@ -484,6 +484,7 @@ impl Studio {
         editor.set_trim_follow(self.prefs.trim_follow);
         editor.set_meters_shown(self.prefs.meters_shown());
         editor.set_preview_axis(self.prefs.preview_axis);
+        editor.set_simple_scrub(self.prefs.simplifies_scrub());
         editor.set_preview_axis_audio(self.prefs.preview_axis_audio);
         editor.set_pan_mode(self.lanes.pan_mode);
         editor.set_selected_count(self.selection.len() as i32);

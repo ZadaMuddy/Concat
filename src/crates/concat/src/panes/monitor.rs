@@ -109,15 +109,6 @@ const SCRUB_GAP: std::time::Duration = std::time::Duration::from_millis(250);
 /// the true frame is there by the time anyone looks.
 const SCRUB_REST: std::time::Duration = std::time::Duration::from_millis(120);
 
-/// How often a scrub's picture goes on the monitor at most.
-///
-/// Every frame is a new texture and a new image, and the window pays to import
-/// it on every paint - so a scrub used to run at the speed the preview could
-/// be redrawn, and the playhead trailed the pointer by a frame of it. Ten
-/// pictures a second is enough to read a cut by; the playhead, which moves on
-/// every report, is what the hand follows.
-const SCRUB_SHOW: std::time::Duration = std::time::Duration::from_millis(100);
-
 /// The monitor's state.
 #[derive(Default)]
 pub struct MonitorPane {
@@ -147,8 +138,11 @@ pub struct MonitorPane {
     refining: bool,
     /// Asks for the exact frame once a scrub has rested; see [`SCRUB_REST`].
     rest: slint::Timer,
-    /// When a scrub's picture last went up; see [`SCRUB_SHOW`].
+    /// When a scrub's picture last went up; see `show_gap`.
     last_shown: Option<std::time::Instant>,
+    /// How fast the playhead is being dragged, in timeline seconds a wall
+    /// second, smoothed: what `show_gap` sets the cadence from.
+    scrub_rate: f32,
 }
 
 /// How smoothly a playback's frames reached the monitor: one line in the
@@ -228,11 +222,12 @@ impl MonitorPane {
                 } else if !spec.moving {
                     self.cadence.report(fps);
                 }
-                // A scrub shows at most one picture in SCRUB_SHOW; the rest
-                // are dropped, and the playhead keeps the pointer's pace while
-                // the picture steps. Dropped ones still mark the picture on
-                // screen as a nearest one, so the rest still refines it.
-                if spec.nearest && self.last_shown.is_some_and(|at| at.elapsed() < SCRUB_SHOW)
+                // A scrub shows one picture per `show_gap`, worked out from
+                // how fast the hand is moving; the rest are dropped, and the
+                // playhead keeps the pointer's pace while the picture steps.
+                // Dropped ones still mark the picture on screen as a nearest
+                // one, so the rest still refines it.
+                if spec.nearest && self.last_shown.is_some_and(|at| at.elapsed() < self.show_gap())
                 {
                     if !result.as_ref().is_err() {
                         self.inexact = true;
@@ -337,6 +332,35 @@ impl MonitorPane {
             .is_some_and(|(at, when)| at != studio.preview_time() && when.elapsed() < SCRUB_GAP)
     }
 
+    /// How often a scrub's picture may go up, from how fast it is dragged.
+    ///
+    /// The cadence a scrub is read at is not one number. A hand crossing the
+    /// cut quickly wants a picture now and then to know where it is passing:
+    /// every picture that goes up is a frame the line has to wait for, so a
+    /// fast drag shows one every quarter of a second. A hand creeping frame
+    /// by frame wants one twenty times a second, because there the picture is
+    /// the thing being read.
+    ///
+    /// Measured in pixels a second the playhead crosses the pane, not in
+    /// timeline seconds: the same hand movement is hundreds of timeline
+    /// seconds a second at a wide zoom and a fraction of one at a tight zoom,
+    /// and what decides whether a frame can be read is how far it moves
+    /// across the screen.
+    fn show_gap(&self) -> std::time::Duration {
+        let speed = self.scrub_rate;
+        if speed >= 1600.0 {
+            std::time::Duration::from_millis(250)
+        } else if speed >= 800.0 {
+            std::time::Duration::from_millis(160)
+        } else if speed >= 300.0 {
+            std::time::Duration::from_millis(90)
+        } else if speed >= 100.0 {
+            std::time::Duration::from_millis(60)
+        } else {
+            std::time::Duration::from_millis(45)
+        }
+    }
+
     /// Asks the engine for the frame at the playhead - or under the pointer,
     /// while the preview axis has it - one at a time.
     ///
@@ -360,8 +384,26 @@ impl MonitorPane {
         let time = studio.preview_time();
         let moving = studio.playing || studio.source.as_ref().is_some_and(|source| source.playing);
         let nearest = !refine && !moving && self.scrubbing(studio);
+        // How fast the playhead is crossing the pane, in pixels a second -
+        // the only speed that means anything to the eye - smoothed so one
+        // slow report cannot swing the cadence.
+        let now = std::time::Instant::now();
+        if let Some((previous_time, previous_at)) = self.moved
+            && previous_time != time
+        {
+            let wall = now.duration_since(previous_at).as_secs_f32();
+            let per_pixel = studio.lanes.seconds_per_pixel;
+            if wall > 0.001 && per_pixel > 0.0 {
+                let speed = (time - previous_time).abs() / wall / per_pixel;
+                self.scrub_rate = if self.scrub_rate == 0.0 {
+                    speed
+                } else {
+                    self.scrub_rate * 0.6 + speed * 0.4
+                };
+            }
+        }
         if self.moved.is_none_or(|(at, _)| at != time) {
-            self.moved = Some((time, std::time::Instant::now()));
+            self.moved = Some((time, now));
         }
         if !refine {
             self.rest.stop();

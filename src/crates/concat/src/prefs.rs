@@ -93,6 +93,12 @@ pub struct Preferences {
     /// may not take (an HDR one opened NVENC first), and the person who
     /// wants one for smoother playback turns it on in Settings.
     pub proxies: bool,
+    /// Simplify clips while scrubbing: the filmstrip and the wave are left
+    /// undrawn while the playhead is dragged, so the frame the hand is
+    /// waiting on is cheaper and the line keeps closer to the pointer. A
+    /// trade either way, so it is the person's switch; the filmstrip going
+    /// flat mid-drag is exactly the sort of thing someone notices.
+    pub simple_scrub: Option<bool>,
     /// Drawing in software: the window and the compositor on the
     /// platform's software rasteriser (WARP, lavapipe) instead of the GPU,
     /// as the person chose in Settings > General or with `concat
@@ -317,6 +323,11 @@ impl Preferences {
     /// Whether a launch opens on the last session's layout.
     pub fn remembers_layout(&self) -> bool {
         self.remember_layout.unwrap_or(true)
+    }
+
+    /// Whether clips are simplified while scrubbing; see `simple_scrub`.
+    pub fn simplifies_scrub(&self) -> bool {
+        self.simple_scrub.unwrap_or(false)
     }
 
     /// Sets the magnetic timeline by the person's choice.
