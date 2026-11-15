@@ -384,6 +384,7 @@ fn start(project: Option<std::path::PathBuf>, smoke: bool) -> Result<(), slint::
     // first thing the window says.
     let mut studio = Studio::new(host);
     studio.set_phone(phone);
+    studio.software_window = safe;
     if safe {
         // Each key in a call of its own: scripts/locales.py finds a key by
         // the literal inside `t(...)`, and one held in a variable is lost.

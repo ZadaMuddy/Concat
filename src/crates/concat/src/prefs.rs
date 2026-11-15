@@ -13,6 +13,25 @@ use serde::{Deserialize, Serialize};
 
 const FILE: &str = "settings.json";
 
+/// How long a build draws in software after a launch died while starting,
+/// before trying the graphics card again: an hour. Long enough that a driver
+/// which kills the launch costs one crash an hour rather than one every
+/// other launch, short enough that a development build - whose string never
+/// changes - is not stuck in software for ever.
+const RETRY_AFTER: u64 = 3600;
+
+/// Seconds since the Unix epoch, for the safe-start mark.
+pub(crate) fn seconds_now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| since.as_secs())
+}
+
+/// How long ago `at` was, in seconds; a mark with no time counts as long ago.
+pub(crate) fn seconds_since(at: u64) -> u64 {
+    seconds_now().saturating_sub(at)
+}
+
 /// The interface scales Settings > Appearance offers, smallest first, as
 /// percents of the display's own scale. Nothing on the list - and no value
 /// at all - leaves the window at the scale the platform hands it. 110 is
@@ -351,18 +370,40 @@ impl Preferences {
             return false;
         }
         match &self.software_after_crash {
-            Some(crashed) if crashed != build => {
-                log::info!(
-                    "start: back on the GPU · {crashed} closed while starting and drew in software, and {build} tries the GPU again"
-                );
-                self.software_after_crash = None;
-                true
+            Some(marker) => {
+                let (crashed, at) = marker
+                    .rsplit_once('|')
+                    .map_or((marker.as_str(), 0), |(build, at)| {
+                        (build, at.parse::<u64>().unwrap_or(0))
+                    });
+                if crashed != build {
+                    log::info!(
+                        "start: back on the GPU · {crashed} closed while starting and drew in software, and {build} tries the GPU again"
+                    );
+                    self.software_after_crash = None;
+                    true
+                } else if crate::prefs::seconds_since(at) >= RETRY_AFTER {
+                    // The same build, and a long time drawing in software
+                    // without dying: whatever closed that launch is not
+                    // closing this one, so try the graphics card again. An
+                    // hour apart, a driver that does kill the launch costs a
+                    // person one crash an hour rather than every other
+                    // launch; the safe start still keeps the one after it.
+                    log::warn!(
+                        "start: an hour of drawing in software with no crash; trying the GPU again - a launch that closes while starting puts this build back in software"
+                    );
+                    self.software_after_crash = None;
+                    true
+                } else {
+                    false
+                }
             }
             None if died_starting => {
                 log::warn!(
-                    "start: the last launch closed while starting; this build draws in software until the next one, or until Draw on the GPU is turned back on"
+                    "start: the last launch closed while starting; this build draws in software for an hour, or until Draw on the GPU is turned back on"
                 );
-                self.software_after_crash = Some(build.to_owned());
+                self.software_after_crash =
+                    Some(format!("{build}|{}", crate::prefs::seconds_now()));
                 true
             }
             _ => false,
@@ -779,7 +820,13 @@ mod tests {
         assert!(prefs.settle_start(false, "b"));
         assert!(!prefs.draws_in_software(), "a new build tries the GPU");
         assert!(prefs.settle_start(true, "b"));
-        assert_eq!(prefs.software_after_crash.as_deref(), Some("b"));
+        assert!(
+            prefs
+                .software_after_crash
+                .as_deref()
+                .is_some_and(|marker| marker.starts_with("b|")),
+            "the mark carries the build and when it was made"
+        );
 
         let mut chosen = Preferences {
             software_gpu: true,
@@ -789,6 +836,30 @@ mod tests {
         assert!(!chosen.settle_start(false, "b"));
         assert!(chosen.draws_in_software());
         assert_eq!(chosen.software_after_crash, None);
+    }
+
+    /// A build that has drawn in software for an hour tries the GPU again:
+    /// a launch that died at start cannot keep a development build - whose
+    /// string never changes - in software for ever.
+    #[test]
+    fn software_lets_go_after_an_hour() {
+        let mut prefs = Preferences {
+            software_after_crash: Some(format!(
+                "a|{}",
+                crate::prefs::seconds_now() - RETRY_AFTER - 1
+            )),
+            ..Preferences::default()
+        };
+        assert!(prefs.draws_in_software());
+        assert!(prefs.settle_start(false, "a"), "the hour is up");
+        assert!(!prefs.draws_in_software());
+
+        let mut fresh = Preferences {
+            software_after_crash: Some(format!("a|{}", crate::prefs::seconds_now())),
+            ..Preferences::default()
+        };
+        assert!(!fresh.settle_start(false, "a"), "the hour is not up");
+        assert!(fresh.draws_in_software());
     }
 
     /// The `softwareGpu` key 0.2.8 wrote is let go, safe start's and the

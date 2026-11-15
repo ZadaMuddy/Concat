@@ -191,8 +191,24 @@ impl Studio {
 
     // ── playback ──
 
+    /// The first time a frame is played in a window that draws in
+    /// software, say why it is slow. The log has said it since launch and
+    /// nobody reads the log; a person who has just pressed play and seen a
+    /// slideshow is the one who needs to know.
+    fn say_software_once(&mut self) {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        static TOLD: AtomicBool = AtomicBool::new(false);
+        if !self.software_window || TOLD.swap(true, Ordering::Relaxed) {
+            return;
+        }
+        log::info!("gpu: the picture is played in a software window; saying so");
+        let notice = crate::i18n::t("start.softwareSlow");
+        self.notify(&notice, false);
+    }
+
     pub fn play_toggle(&mut self) {
         self.stop_glide();
+        self.say_software_once();
         // A voiceover take owns the transport while it runs: Space, the
         // monitor's button and the keymap's play pause or resume the take
         // and the picture together, never the picture alone.

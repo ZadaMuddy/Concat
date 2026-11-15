@@ -777,6 +777,7 @@
   "start.reportProblem": "Report a problem",
   "start.reportProblemNote": "What to send so it can be fixed",
   "start.safeMode": "Concat closed while starting once, so it draws in software until its next update: slower, but it opens. To try the graphics card now, turn on Draw on the GPU in Settings > General.",
+  "start.softwareSlow": "Drawing in software, so the picture is slower. Settings › General › Draw on the GPU fixes it.",
   "start.safeModePhone": "Concat closed while starting once, so it draws in a slower, safer mode until its next update.",
   "start.searchProjects": "Search projects",
   "start.settingsApplyWholeEdit": "The frame, the rate and the background can all be changed later in Project settings.",

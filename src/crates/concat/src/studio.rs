@@ -1014,6 +1014,10 @@ const ENHANCE_MARGIN: f64 = 1.0;
 pub struct Studio {
     pub host: Host,
     pub prefs: Preferences,
+    /// This launch's window draws in software. Fixed when the window was
+    /// made: turning the preference back on does not redraw it, so nothing
+    /// that explains the window's speed may read the preference instead.
+    pub software_window: bool,
     /// What each effect library is showing, indexed the way `SHELF_KINDS`
     /// is: 0 filters, 1 effects, 2 audio.
     pub library: [LibraryView; 4],
@@ -3087,6 +3091,7 @@ impl Studio {
         let text_presets = presets::all(&host.dirs);
         let mut studio = Self {
             prefs,
+            software_window: false,
             library: Default::default(),
             session: None,
             echo: None,
