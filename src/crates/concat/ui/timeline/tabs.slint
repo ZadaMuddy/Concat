@@ -127,9 +127,10 @@ component Tab inherits Rectangle {
         clip: true;
 
         rename := TextInput {
-            x: 5px;
+            property <length> scroll;
+            x: 5px + min(0px, max(parent.width - 10px - self.width - self.text-cursor-width, self.scroll));
             y: (parent.height - self.height) / 2;
-            width: parent.width - 10px;
+            width: max(parent.width - 10px - self.text-cursor-width, self.preferred-width);
             // A TextInput fills its Rectangle parent by default, so without
             // this the centring above subtracts the parent's own height from
             // itself and resolves to zero, leaving the text against the top
@@ -145,6 +146,14 @@ component Tab inherits Rectangle {
             init => {
                 self.focus();
                 self.select-all();
+            }
+
+            cursor-position-changed(caret) => {
+                if caret.x + self.scroll < 0px {
+                    self.scroll = -caret.x;
+                } else if caret.x + self.scroll > parent.width - 10px - self.text-cursor-width {
+                    self.scroll = parent.width - 10px - caret.x - self.text-cursor-width;
+                }
             }
 
             // Commit on blur, so clicking away saves rather than discards —

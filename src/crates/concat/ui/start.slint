@@ -232,9 +232,13 @@ component PlainInput inherits Rectangle {
     }
 
     input := TextInput {
-        x: 0;
+        // The text follows the caret: a name longer than the field used to
+        // run out of the right edge with the caret on it, and nothing said
+        // what had been typed.
+        property <length> scroll;
+        x: min(0px, max(parent.width - self.width - self.text-cursor-width, self.scroll));
         y: (parent.height - self.height) / 2;
-        width: parent.width;
+        width: max(parent.width - self.text-cursor-width, self.preferred-width);
         // A TextInput fills its Rectangle parent by default, so without
         // this the centring above subtracts the parent's own height from
         // itself and resolves to zero, leaving the text against the top
@@ -251,6 +255,13 @@ component PlainInput inherits Rectangle {
 
         edited => { root.edited(self.text); }
         accepted => { root.accepted(); }
+        cursor-position-changed(caret) => {
+            if caret.x + self.scroll < 0px {
+                self.scroll = -caret.x;
+            } else if caret.x + self.scroll > parent.width - self.text-cursor-width {
+                self.scroll = parent.width - caret.x - self.text-cursor-width;
+            }
+        }
     }
 
     if root.draft == "": Text {
@@ -1198,9 +1209,10 @@ component SearchField inherits Rectangle {
     }
 
     input := TextInput {
-        x: 34px;
+        property <length> scroll;
+        x: 34px + min(0px, max(parent.width - 34px - 32px - self.width - self.text-cursor-width, self.scroll));
         y: (parent.height - self.height) / 2;
-        width: parent.width - 34px - 32px;
+        width: max(parent.width - 34px - 32px - self.text-cursor-width, self.preferred-width);
         height: self.preferred-height;
         text <=> root.draft;
         color: Theme.fg;
@@ -1210,6 +1222,13 @@ component SearchField inherits Rectangle {
         selection-foreground-color: Theme.on-accent;
         accessible-label: root.placeholder;
         edited => { root.edited(self.text); }
+        cursor-position-changed(caret) => {
+            if caret.x + self.scroll < 0px {
+                self.scroll = -caret.x;
+            } else if caret.x + self.scroll > parent.width - 34px - 32px - self.text-cursor-width {
+                self.scroll = parent.width - 34px - 32px - caret.x - self.text-cursor-width;
+            }
+        }
     }
 
     if root.draft == "": Text {

@@ -758,15 +758,26 @@ export component SearchField inherits Rectangle {
             clip: true;
 
             input := TextInput {
-                x: 0;
+                // The text follows the caret: a name longer than the field
+                // used to run out of the right edge with the caret on it, and
+                // nothing said what had been typed.
+                property <length> scroll;
+                x: min(0px, max(parent.width - self.width - self.text-cursor-width, self.scroll));
                 y: (parent.height - self.height) / 2;
-                width: parent.width;
+                width: max(parent.width - self.text-cursor-width, self.preferred-width);
                 height: self.preferred-height;
                 color: Theme.fg;
                 font-size: Theme.fs;
                 single-line: true;
                 text <=> root.text;
                 edited => { root.edited(self.text); }
+                cursor-position-changed(caret) => {
+                    if caret.x + self.scroll < 0px {
+                        self.scroll = -caret.x;
+                    } else if caret.x + self.scroll > parent.width - self.text-cursor-width {
+                        self.scroll = parent.width - caret.x - self.text-cursor-width;
+                    }
+                }
                 // Enter and Esc are done typing, as on the web: the field lets
                 // go and the window's shortcuts have their keys back. The
                 // words stay; the cross clears them.
@@ -957,9 +968,10 @@ export component ColourField inherits HorizontalLayout {
                     }
 
                     input := TextInput {
-                        x: 8px;
+                        property <length> scroll;
+                        x: 8px + min(0px, max(parent.width - 16px - self.width - self.text-cursor-width, self.scroll));
                         y: (parent.height - self.height) / 2;
-                        width: parent.width - 16px;
+                        width: max(parent.width - 16px - self.text-cursor-width, self.preferred-width);
                         height: self.preferred-height;
                         text <=> root.draft;
                         color: Theme.fg;
@@ -970,6 +982,13 @@ export component ColourField inherits HorizontalLayout {
                         selection-foreground-color: Theme.on-accent;
 
                         accepted => { root.adopt(); }
+                        cursor-position-changed(caret) => {
+                            if caret.x + self.scroll < 0px {
+                                self.scroll = -caret.x;
+                            } else if caret.x + self.scroll > parent.width - 16px - self.text-cursor-width {
+                                self.scroll = parent.width - 16px - caret.x - self.text-cursor-width;
+                            }
+                        }
                         changed has-focus => {
                             if (!self.has-focus) {
                                 root.adopt();
