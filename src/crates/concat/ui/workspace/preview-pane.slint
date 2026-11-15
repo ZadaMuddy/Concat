@@ -731,6 +731,8 @@ component StageOverlay inherits Rectangle {
 }
 
 export component PreviewPane inherits Rectangle {
+    changed width => { root.stage-resized(root.width, root.height); }
+    changed height => { root.stage-resized(root.width, root.height); }
     // ── what the output is ───────────────────────────────────────────────
     in property <int> output-width: 1920;
     in property <int> output-height: 1080;
@@ -783,6 +785,10 @@ export component PreviewPane inherits Rectangle {
     callback step(frames: float);
     callback ratio-changed(index: int);
     callback quality-changed(index: int);
+    /// The stage's own size, in logical pixels: the largest picture the
+    /// screen can show. The monitor renders its frame no bigger than this -
+    /// a 1920x1080 frame in a 900x500 stage is nine tenths of it unseen.
+    callback stage-resized(width: length, height: length);
 
     // The stage's own gestures; see the Editor global for what each means.
     callback stage-pressed(x: float, y: float, additive: bool);
@@ -834,7 +840,12 @@ export component PreviewPane inherits Rectangle {
     // bound. Same shape as the inspector panels.
     property <float> shown-frames;
     function seed() { root.shown-frames = root.frames; }
-    init => { root.seed(); }
+    init => {
+        root.seed();
+        // The stage's first size, once the layout has settled into one:
+        // the monitor renders no frame larger than the stage can show.
+        root.stage-resized(root.width, root.height);
+    }
     changed frames => { root.seed(); }
 
     Pane {

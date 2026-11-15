@@ -62,9 +62,12 @@ impl Studio {
                 // per pointer step - and the blocks they report are scaled
                 // back up to the output's terms, which the stage measures
                 // in. Nothing is written until the change is committed.
+                // No stage here: these are the output's own terms, which a
+                // caption is written in, not the size it is shown at.
                 let (shown_w, shown_h) = crate::panes::monitor::MonitorPane::frame_size(
                     self.quality_of(),
                     (width, height),
+                    None,
                 );
                 let scale = f64::from(shown_w) / f64::from(width);
                 let up = |px: u32| (f64::from(px) / scale).round() as u32;

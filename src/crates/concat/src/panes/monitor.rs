@@ -119,6 +119,10 @@ pub struct MonitorPane {
     /// Said once per project: a monitor that cannot decode says so, and
     /// then stops repeating itself.
     failed: bool,
+    /// The stage's size in physical pixels, when the window has said: the
+    /// most the monitor can show. `None` until the first report, which the
+    /// window makes as its layout settles.
+    stage: Option<(u32, u32)>,
     /// 0 Full, 1 Half, 2 Quarter of the output size, by timeline id. Kept
     /// per timeline because the cost it trades against is the timeline's
     /// frame - a 4K cut wants the quarter setting that a 1080p cut beside
@@ -331,14 +335,36 @@ impl MonitorPane {
 
     /// The frame's size at a quality tier: the output scaled, rounded to
     /// even dimensions, never smaller than two pixels a side.
-    pub fn frame_size(quality: usize, (width, height): (u32, u32)) -> (u32, u32) {
+    pub fn frame_size(
+        quality: usize,
+        (width, height): (u32, u32),
+        stage: Option<(u32, u32)>,
+    ) -> (u32, u32) {
         let scale = match quality {
             0 => 1.0,
             1 => 0.5,
             _ => 0.25,
         };
         let side = |px: u32| ((f64::from(px) * scale).round() as u32).max(2) & !1;
-        (side(width), side(height))
+        let (width, height) = (side(width), side(height));
+        // Never bigger than the stage: the picture is fitted into it, so a
+        // frame larger than it is decoded, composed and uploaded for nobody.
+        // Both sides shrink by the same factor, to keep the frame's shape.
+        let Some((stage_width, stage_height)) = stage else {
+            return (width, height);
+        };
+        if width <= stage_width && height <= stage_height {
+            return (width, height);
+        }
+        let fit = (f64::from(stage_width) / f64::from(width))
+            .min(f64::from(stage_height) / f64::from(height));
+        let shrink = |px: u32| (((f64::from(px) * fit).round() as u32).max(2)) & !1;
+        (shrink(width), shrink(height))
+    }
+
+    /// The stage's size in physical pixels, as the window reports it.
+    pub fn set_stage(&mut self, stage: (u32, u32)) {
+        self.stage = Some(stage);
     }
 
     /// Whether the playhead moved within [`SCRUB_GAP`] of its last move and
@@ -425,8 +451,11 @@ impl MonitorPane {
         if !refine {
             self.rest.stop();
         }
-        let (width, height) =
-            Self::frame_size(self.quality_of(studio.project()), studio.output_size());
+        let (width, height) = Self::frame_size(
+            self.quality_of(studio.project()),
+            studio.output_size(),
+            self.stage,
+        );
         let Some((clips, settings)) = studio.preview_clips() else {
             return;
         };
@@ -510,17 +539,38 @@ mod tests {
 
     #[test]
     fn a_frame_is_even_sided_and_never_vanishes() {
-        assert_eq!(MonitorPane::frame_size(0, (1920, 1080)), (1920, 1080));
-        assert_eq!(MonitorPane::frame_size(1, (1920, 1080)), (960, 540));
-        assert_eq!(MonitorPane::frame_size(2, (1920, 1080)), (480, 270));
+        assert_eq!(MonitorPane::frame_size(0, (1920, 1080), None), (1920, 1080));
+        assert_eq!(MonitorPane::frame_size(1, (1920, 1080), None), (960, 540));
+        assert_eq!(MonitorPane::frame_size(2, (1920, 1080), None), (480, 270));
         // An odd output at half is rounded to even, as the encoder and the
         // chroma planes need.
-        assert_eq!(MonitorPane::frame_size(1, (1001, 1001)), (500, 500));
+        assert_eq!(MonitorPane::frame_size(1, (1001, 1001), None), (500, 500));
         // Nothing gets smaller than two pixels a side, whatever the tier.
-        assert_eq!(MonitorPane::frame_size(2, (1, 1)), (2, 2));
-        assert_eq!(MonitorPane::frame_size(2, (0, 0)), (2, 2));
+        assert_eq!(MonitorPane::frame_size(2, (1, 1), None), (2, 2));
+        assert_eq!(MonitorPane::frame_size(2, (0, 0), None), (2, 2));
         // A tier past the picker's three is the smallest one.
-        assert_eq!(MonitorPane::frame_size(9, (400, 400)), (100, 100));
+        assert_eq!(MonitorPane::frame_size(9, (400, 400), None), (100, 100));
+    }
+
+    /// A frame is never larger than the stage that shows it: the picture is
+    /// fitted to the stage, so the rest of a bigger frame is work nobody
+    /// sees. Both sides shrink together, keeping the frame's shape.
+    #[test]
+    fn a_frame_is_no_larger_than_the_stage() {
+        // 1920x1080 in a 900x500 stage: 500/1080 is the tighter ratio.
+        assert_eq!(
+            MonitorPane::frame_size(0, (1920, 1080), Some((900, 500))),
+            (888, 500)
+        );
+        // A stage with room to spare changes nothing.
+        assert_eq!(
+            MonitorPane::frame_size(0, (1920, 1080), Some((2560, 1440))),
+            (1920, 1080)
+        );
+        assert_eq!(
+            MonitorPane::frame_size(2, (1920, 1080), Some((2000, 2000))),
+            (480, 270)
+        );
     }
 
     #[test]

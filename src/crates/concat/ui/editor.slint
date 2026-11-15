@@ -278,6 +278,8 @@ export global Editor {
     callback step-frames(frames: float);
     callback ratio-changed(index: int);
     callback quality-changed(index: int);
+    /// The stage's size on screen, in logical pixels; see PreviewPane.
+    callback stage-resized(width: length, height: length);
 
     /// Every picture under the playhead, placed as the compositor places it.
     /// The stage outlines the selected ones and lets them be moved, scaled

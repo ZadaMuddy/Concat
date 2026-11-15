@@ -1592,6 +1592,19 @@ fn start(project: Option<std::path::PathBuf>, smoke: bool) -> Result<(), slint::
     editor.on_ratio_changed(on_window!(|state, index: i32| {
         state.set_output((index.max(0) as usize).min(OUTPUTS.len() - 1));
     }));
+    // The stage's size on screen, in logical pixels: the monitor renders no
+    // frame larger than the stage can show it at.
+    editor.on_stage_resized(|width: f32, height: f32| {
+        Shell::with(|shell, app| {
+            let scale = app.window().scale_factor();
+            let side = |px: f32| ((px * scale).round().max(2.0)) as u32;
+            shell
+                .studio
+                .borrow_mut()
+                .monitor
+                .set_stage((side(width), side(height)));
+        });
+    });
     editor.on_quality_changed(on_window!(|state, index: i32| {
         state.handle(Msg::Monitor(MonitorMsg::QualityChanged(index)));
     }));

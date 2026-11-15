@@ -180,6 +180,7 @@ export component Seat inherits Rectangle {
             pane-removable: Editor.seats.length > 1;
             pane-removed => { root.removed(); }
 
+            stage-resized(width, height) => { Editor.stage-resized(width, height); }
             previewing: Editor.library-audition != "";
             preview-ended => { Editor.library-audition-filter(Editor.library-audition); }
             output-width: Editor.output-width;
