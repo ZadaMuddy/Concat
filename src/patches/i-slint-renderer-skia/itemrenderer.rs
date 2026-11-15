@@ -51,7 +51,7 @@ impl<'a> SkiaItemRenderer<'a> {
     /// Counts the item into a quarter of the window, for the census: the
     /// renderer knows no names, but it knows where a thing is drawn.
     fn count_region(&self, item: &i_slint_core::items::ItemRc) {
-        if !super::paint_profile::enabled() {
+        if !super::paint_profile::enabled() || !super::paint_profile::census_on() {
             return;
         }
         // `geometry()` is in the parent's coordinates: walk up to the window.

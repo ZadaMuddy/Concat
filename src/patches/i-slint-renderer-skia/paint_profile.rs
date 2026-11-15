@@ -14,6 +14,15 @@
 //! Only while `CONCAT_PROFILE` is set. Off, a scope is one relaxed load and
 //! the timestamps are never taken.
 
+/// Whether the per-item census is on: `CONCAT_CENSUS=1`. It walks each
+/// drawn item's parent chain and takes a lock for it, which is far too much
+/// to pay while measuring the paint it is walking - so it is a switch of its
+/// own, and off unless asked for.
+pub fn census_on() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("CONCAT_CENSUS").is_some())
+}
+
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
@@ -207,6 +216,20 @@ pub fn dump(frame_draw: Duration) {
     }
     if !leads.is_empty() {
         eprintln!("gaps:  {leads}");
+    }
+    // The item walk, from the core's own counters: how many items were
+    // visited against how many were drawn, and which half of the visit the
+    // frame paid for. Averages of the twenty frames since the last line.
+    let (visits, drawn, geometry, drawing) = i_slint_core::walk_profile::take();
+    if visits > 0 {
+        let per_frame = 20.0;
+        eprintln!(
+            "walk:   {:.0} visits a frame ({:.0} drawn) · geometry {:.2} ms · drawing {:.2} ms",
+            visits as f64 / per_frame,
+            drawn as f64 / per_frame,
+            geometry.as_secs_f64() * 1000.0 / per_frame,
+            drawing.as_secs_f64() * 1000.0 / per_frame,
+        );
     }
     let mut grid = String::new();
     for row in 0..REGION_ROWS {

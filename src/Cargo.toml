@@ -148,6 +148,11 @@ incremental = false
 # bump it with Slint, re-applying the change.
 [patch.crates-io]
 i-slint-renderer-skia = { path = "patches/i-slint-renderer-skia" }
+# The item walk: how Slint decides what each frame draws. Concat's window
+# spends most of a frame in it - see `render_item_children` - and the only
+# way to see inside was to own the copy. 1.18.1 exactly; bump it with Slint,
+# re-applying the change.
+i-slint-core = { path = "patches/i-slint-core" }
 # whisper.cpp's Rust build, as published, able to build ggml as shared
 # libraries with one CPU backend per x86_64 generation chosen at run time
 # (see patches/README.md, and GGML_BACKEND_DL in build-app.yml). 0.15.0
