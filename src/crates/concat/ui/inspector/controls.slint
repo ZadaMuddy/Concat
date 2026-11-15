@@ -777,6 +777,12 @@ export component SearchField inherits Rectangle {
                     } else if caret.x + self.scroll > parent.width - self.text-cursor-width {
                         self.scroll = parent.width - caret.x - self.text-cursor-width;
                     }
+                    // A text short enough to fit sits at the start of the box:
+                    // deleting back past the beginning of a long one used to leave
+                    // it scrolled, with empty space after it and no way back.
+                    if self.width <= parent.width - self.text-cursor-width && self.scroll < 0px {
+                        self.scroll = 0px;
+                    }
                 }
                 // Enter and Esc are done typing, as on the web: the field lets
                 // go and the window's shortcuts have their keys back. The
@@ -987,6 +993,12 @@ export component ColourField inherits HorizontalLayout {
                                 self.scroll = -caret.x;
                             } else if caret.x + self.scroll > parent.width - 16px - self.text-cursor-width {
                                 self.scroll = parent.width - 16px - caret.x - self.text-cursor-width;
+                            }
+                            // A text short enough to fit sits at the start of the box:
+                            // deleting back past the beginning of a long one used to leave
+                            // it scrolled, with empty space after it and no way back.
+                            if self.width <= parent.width - 16px - self.text-cursor-width && self.scroll < 0px {
+                                self.scroll = 0px;
                             }
                         }
                         changed has-focus => {
