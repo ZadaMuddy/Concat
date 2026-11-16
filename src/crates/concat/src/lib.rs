@@ -1222,6 +1222,28 @@ fn start(project: Option<std::path::PathBuf>, smoke: bool) -> Result<(), slint::
     editor.on_scrubbed_drag(handler!(publish_scrub, |state, seconds: f32| {
         state.scrub_snapped(seconds);
     }));
+    // A click on the playhead's line, which is drawn over the clips and so
+    // takes the press: the clip under it is the one meant. `x` is pixels
+    // across the lanes and `y` pixels down the stack, as the band's are.
+    editor.on_playhead_clicked(on_lanes!(|state, x: f32, y: f32| {
+        let seconds = state.lanes.scroll_left + x * state.lanes.seconds_per_pixel;
+        let row = state.row_at(y);
+        state.flush_commit();
+        let found = state
+            .timeline()
+            .clips
+            .iter()
+            .find(|clip| {
+                state.row_of(&clip.track_id) == row
+                    && clip.start as f32 <= seconds
+                    && (clip.start + clip.duration) as f32 >= seconds
+                    && !state.locked(&clip.track_id)
+            })
+            .map(|clip| clip.id.clone());
+        if let Some(id) = found {
+            state.clip_pressed(&id, false, -1);
+        }
+    }));
     editor.on_edge_step(on_lanes!(|state, speed: f32, direction: i32| {
         state.edge_step(speed, direction);
     }));

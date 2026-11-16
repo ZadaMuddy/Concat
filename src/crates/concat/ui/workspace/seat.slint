@@ -472,6 +472,10 @@ export component Seat inherits Rectangle {
                 Editor.blur();
                 Editor.scrubbed-drag(seconds);
             }
+            playhead-clicked(x, y) => {
+                Editor.blur();
+                Editor.playhead-clicked(x, y);
+            }
             edge-step(speed, direction) => { Editor.edge-step(speed, direction); }
             clip-pressed(id, additive, edge) => {
                 Editor.blur();

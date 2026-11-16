@@ -482,6 +482,9 @@ export global Editor {
     /// A seek from a drag: the playhead is pulled to the nearest cut as it
     /// goes. A click comes through `scrubbed` and lands exactly where it did.
     callback scrubbed-drag(seconds: float);
+    /// A click on the playhead's line, selecting the clip under it; see
+    /// `Lanes.playhead-clicked` for the coordinates.
+    callback playhead-clicked(x: float, y: float);
     /// One tick of the edge scroll: `speed` pixels a second, and which way.
     /// Rust carries it for as long as it has actually been, since a timer's
     /// interval is what it asked for and not what it got.

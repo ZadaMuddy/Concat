@@ -1355,6 +1355,11 @@ export component Lanes inherits Rectangle {
     /// A click still seeks exactly where it landed, so a press meant to land
     /// on one frame is never moved off it.
     callback scrubbed-drag(seconds: float);
+    /// A click on the playhead's line - a press that never became a drag.
+    /// `x` is across the lanes and `y` down the stack from the first lane's
+    /// top, scroll included: the same frame the band's ys arrive in. The
+    /// clip under it is the one meant; the line was only in the way.
+    callback playhead-clicked(x: float, y: float);
     /// One tick of the edge scroll: `speed` pixels a second, and which way.
     callback edge-step(speed: float, direction: int);
     /// A ruler diamond dragged from one instant to another.
@@ -2314,6 +2319,13 @@ export component Lanes inherits Rectangle {
             // from a box the previous one had just moved. Held still,
             // `mouse-x` is a plain distance and the drag reads as a drag.
             property <length> press-x: 0px;
+            /// Where the press landed, in the lanes' own terms, so a click
+            /// that never moves still knows what it was over.
+            property <length> press-lane-x: 0px;
+            property <length> press-lane-y: 0px;
+            /// The press has travelled far enough to be a drag of the line:
+            /// until it has, it is a click on the clip beneath.
+            property <bool> dragged: false;
             x: self.pressed ? self.press-x : root.at(root.playhead) - 4px;
             y: 0;
             width: 9px;
@@ -2332,11 +2344,23 @@ export component Lanes inherits Rectangle {
                 if (event.kind == PointerEventKind.down
                     && event.button == PointerEventButton.left) {
                     self.press-x = root.at(root.playhead) - 4px;
+                    self.press-lane-x = self.lane-x();
+                    self.press-lane-y = self.mouse-y;
+                    self.dragged = false;
                     root.grip-held = true;
                     root.scrubbing = true;
                     root.pointer-x = self.lane-x();
                 } else if (event.kind == PointerEventKind.up
                     || event.kind == PointerEventKind.cancel) {
+                    // A click on the line is a click on the clip under it:
+                    // the line sits in front of the clips, and a press that
+                    // never moved meant the clip, not the line.
+                    if (!self.dragged) {
+                        root.playhead-clicked(
+                            self.press-lane-x / 1px,
+                            root.stack-y(self.press-lane-y - root.ruler-height) / 1px
+                        );
+                    }
                     root.grip-held = false;
                     root.scrubbing = false;
                 }
@@ -2345,8 +2369,15 @@ export component Lanes inherits Rectangle {
             // should not nudge it by the few pixels the pointer sits off it.
             moved => {
                 if (self.pressed) {
-                    root.pointer-x = self.lane-x();
-                    root.scrubbed-drag(Math.max(0, root.seconds-at(self.lane-x())));
+                    // Three pixels of travel is the line being dragged, not
+                    // a hand shaking on a click.
+                    if (!self.dragged && Math.abs(self.lane-x() - self.press-lane-x) > 3px) {
+                        self.dragged = true;
+                    }
+                    if (self.dragged) {
+                        root.pointer-x = self.lane-x();
+                        root.scrubbed-drag(Math.max(0, root.seconds-at(self.lane-x())));
+                    }
                 }
             }
         }
